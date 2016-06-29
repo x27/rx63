@@ -110,18 +110,18 @@ int set_displ(op_t &op, ld_t ld, memex_t memex, uval_t reg, ea_t ea)
 	if (ld == ld_t::dsp8)
 	{
 		uval_t value = get_scale(memex) * get_hl8( ea );
-		set_displ_reg(cmd.Op1, reg, value, memex);
+		set_displ_reg(op, reg, value, memex);
 		res = 1;
 	}
-	else if (cmd.Op1.ld == ld_t::dsp16)
+	else if (ld == ld_t::dsp16)
 	{
 		uval_t value = get_scale(memex) * get_hl16( ea );
-		set_displ_reg(cmd.Op1, reg, value, memex);
+		set_displ_reg(op, reg, value, memex);
 		res = 2;
 	}
 	else
 	{
-		set_displ_reg(cmd.Op1, reg, 0, memex);
+		set_displ_reg(op, reg, 0, memex);
 	}
 	return res;
 }
@@ -129,6 +129,10 @@ int set_displ(op_t &op, ld_t ld, memex_t memex, uval_t reg, ea_t ea)
 /* -------------------------------------------------------------*/
 /* ---------	instruction providers -------------------------- */
 /* -------------------------------------------------------------*/
+
+void b1_cd_dsp()
+{
+}
 
 void b1_imm4_rd()
 {
@@ -142,6 +146,13 @@ void b1_imm4_rd()
 
 void b1_imm5_rd()
 {
+	ushort data0 = (get_hl8( cmd.ea ) & 1) << 4;
+	ushort data1 = get_hl8( cmd.ea + 1 );
+
+	cmd.size = 2;
+	cmd.Op1.type = o_imm;
+	cmd.Op1.value = (data0 | (data1 >> 4)) & 0x1f;
+	set_reg(cmd.Op2, data1 & 0xf);
 }
 
 void b1_ld_rs_rd()
@@ -216,10 +227,23 @@ void b2_imm8()
 
 void b2_ld_rd_imm3()
 {
+	ld_t ld = (ld_t) ( get_hl8( cmd.ea ) & 3 );
+	uchar data = get_hl8( cmd.ea + 1 );
+
+	cmd.Op1.type = o_imm;
+	cmd.Op1.dtyp = dt_byte;
+	cmd.Op1.value = data & 7;
+
+	cmd.size = 2 + set_displ( cmd.Op2, ld, memex_t::b, data >> 4, cmd.ea + 2);
 }
 
 void b2_ld_rd_rs()
 {
+	ld_t ld = (ld_t) ( get_hl8( cmd.ea + 1) & 3 );
+	uchar data = get_hl8( cmd.ea + 2 );
+
+	set_reg(cmd.Op1, data & 0xf);
+	cmd.size = 3 + set_displ(cmd.Op2, ld, memex_t::b, data >> 4, cmd.ea + 3);
 }
 
 void b2_ld_rs_rd()
@@ -232,6 +256,11 @@ void b2_ld_rs_sz()
 
 void b2_li_rd()
 {
+	simm_t li = (simm_t)(get_hl8( cmd.ea ) & 3);
+	uchar data = get_hl8 ( cmd.ea + 1 );
+
+	cmd.size = 2 + set_imm(cmd.Op1, li, cmd.ea + 2);
+	set_reg(cmd.Op2, data & 3);
 }
 
 void b2_mi_ld_rs_rd()
@@ -351,6 +380,7 @@ struct function_desc_t
 
 static struct function_desc_t function_descs[] = 
 {
+	{ &b1_cd_dsp,		1, { 0xf0 } },
 	{ &b1_imm4_rd,		1, { 0xff } },
 	{ &b1_imm5_rd,		1, { 0xfe } },
 	{ &b1_ld_rs_rd,		1, { 0xfc } },
@@ -402,14 +432,28 @@ struct opcode_t
 static struct opcode_t opcodes[] = {
 	{ RX63_abs,		&b2_rd,				{ 0x7e, 0x20 } },
 	{ RX63_abs_,	&b2_rs_rd,			{ 0xfc, 0x0f } },
+
 	{ RX63_adc,		&b3_li_rd,			{ 0xfd, 0x70, 0x20 } },
 	{ RX63_adc,		&b2_rs_rd,			{ 0xfc, 0x0b } },
 	{ RX63_adc,		&b3_ld_rs_rd,		{ 0x06,  0xa0, 0x02 } },
+
 	{ RX63_add,		&b1_imm4_rd,		{ 0x62 } },
 	{ RX63_add,		&b1_ld_rs_rd,		{ 0x48 } },
 	{ RX63_add,		&b2_mi_ld_rs_rd,	{ 0x06, 0x08 } },
 	{ RX63_add_,	&b1_li_rs2_rd,		{ 0x70 } },
 	{ RX63_add_,	&b2_rd_rs_rs2,		{ 0xff, 0x20 } },
+
+	{ RX63_and,		&b1_imm4_rd,		{ 0x64 } },
+	{ RX63_and,		&b2_li_rd,			{ 0x74, 0x20 } },
+	{ RX63_and,		&b1_ld_rs_rd,		{ 0x50 } },
+	{ RX63_and,		&b2_mi_ld_rs_rd,	{ 0x06, 0x10 } },
+	{ RX63_and_,	&b2_rd_rs_rs2,		{ 0xff, 0x40 } },
+
+	{ RX63_bclr,	&b2_ld_rd_imm3,		{ 0xf0, 0x08 } },
+	{ RX63_bclr,	&b2_ld_rd_rs,		{ 0xfc, 0x64 } },
+	{ RX63_bclr,	&b1_imm5_rd,		{ 0x7a } },
+
+	{ RX63_b,		&b1_cd_dsp,			{ 0x10 }},
 
 	{ RX63_brk,		&b1_no_args,		{ 0x00 } },
 };
@@ -451,6 +495,7 @@ int idaapi ana( void )
 	bool fl_exit = false;
 	int stage = 0;
 	cmd.size = 0;
+	cmd.auxpref = condition_t::none;
 
 	while(stage < 3 && !fl_exit)
 	{
@@ -460,8 +505,7 @@ int idaapi ana( void )
 				continue;
 	
 			parse_result_t res = parse_opcode(stage, opcodes[i].opcodes[stage], opcodes[i].function);
-			msg("stage:%d opcode:%a res:%d\n", stage, opcodes[i].opcodes[stage], res);
-
+			//msg("stage:%d opcode:%a res:%d\n", stage, opcodes[i].opcodes[stage], res);
 
 			if (res == parse_result_t::match)
 			{

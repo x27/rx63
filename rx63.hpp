@@ -26,6 +26,26 @@ enum memex_t
 	ub = 4
 };
 
+enum condition_t
+{
+	eq = 0,
+	ne = 1,
+	c = 2,
+	nc = 3,
+	gtu = 4,
+	leu = 5,
+	pz = 6,
+	n = 7,
+	ge = 8,
+	lt = 9,
+	gt = 10,
+	le = 11,
+	o = 12,
+	no = 13,
+	bra = 14,
+	none = 15
+};
+
 enum ld_t
 {
 	in_reg = 0, // @reg

@@ -1,5 +1,10 @@
 #include "rx63.hpp"
 
+static const char * const ccode[] =
+{
+	"eq", "ne", "c", "nc", "gtu", "leu", "pz", "n", "ge", "lt", "gt", "le", "o", "no", "bra", ""
+};
+
 inline void out_reg(int rgnum)
 {
 	out_register(ph.regNames[rgnum]);
