@@ -14,9 +14,25 @@ enum RX63_registers
 	r_cs, r_ds
 };
 
-
 #define memex specflag1
 #define ld specflag2
+
+enum memex_t
+{
+	b = 0,
+	w = 1,
+	l = 2,
+	uw = 3,
+	ub = 4
+};
+
+enum ld_t
+{
+	in_reg = 0, // @reg
+	dsp8 = 1,
+	dsp16 = 2,
+	reg = 3	// reg
+};
 
 void idaapi header( void );
 void idaapi footer( void );

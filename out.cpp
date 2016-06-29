@@ -87,18 +87,45 @@ bool idaapi outop(op_t &x)
 		// immediate
 		case o_imm:
 			out_symbol('#');
-			OutValue(x, OOFW_IMM|OOF_SIGNED);
+			OutValue(x, OOFW_IMM);
 			break;
 
-		// displ @(imm, reg)
+		// displ dsp[reg]
 		case o_displ:
-			out_symbol('@');
-			out_symbol('(');
-			OutValue(x, OOF_SIGNED | OOF_ADDR | OOFW_32);
-			out_symbol(',');
-			OutChar(' ');
-			out_reg(x.reg);
-			out_symbol(')');
+
+			if (x.ld == ld_t::reg)
+			{
+				out_reg(x.reg);
+			}
+			else {
+				if (x.value != 0)
+					OutValue(x, OOFS_NOSIGN);
+				out_symbol('[');
+				out_reg(x.reg);
+				out_symbol(']');
+				out_symbol('.');
+			
+				switch(x.memex)
+				{
+					case memex_t::l:
+						out_symbol('l');
+						break;
+					case memex_t::uw:
+						out_symbol('u');
+						out_symbol('w');
+						break;
+					case memex_t::b:
+						out_symbol('b');
+						break;
+					case memex_t::w:
+						out_symbol('w');
+						break;
+					case memex_t::ub:
+						out_symbol('u');
+						out_symbol('b');
+						break;
+				}
+			}
 			break;
 
 		// address
