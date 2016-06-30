@@ -130,8 +130,89 @@ int set_displ(op_t &op, ld_t ld, memex_t memex, uval_t reg, ea_t ea)
 /* ---------	instruction providers -------------------------- */
 /* -------------------------------------------------------------*/
 
-void b1_cd_dsp()
+void b1_cd_dsp_s()
 {
+	uchar data = get_hl8( cmd.ea );
+	cmd.auxpref = (data & 0x08) == 0 ? condition_t::eq : condition_t::ne;
+	cmd.auxpref |= (memex_t::s + 1) << 4;
+	cmd.Op1.type = o_near;
+	cmd.Op1.dtyp = dt_code;
+
+	uint disp = data & 7;
+	if (disp < 3)
+		disp += 8;
+	cmd.Op1.addr = cmd.ea + disp;
+	cmd.size = 1;
+}
+
+void b1_cd_dsp_b()
+{
+	uchar data = get_hl8( cmd.ea );
+
+	uchar cd = data & 0xf;
+
+	if (cd == 0xf || cd == 0xe)
+		return;
+
+	cmd.auxpref = cd;
+	cmd.auxpref |= (memex_t::b + 1) << 4;
+	cmd.Op1.type = o_near;
+	cmd.Op1.dtyp = dt_code;
+
+	cmd.Op1.addr = cmd.ea + get_hl8( cmd.ea + 1);
+	cmd.size = 2;
+}
+
+void b1_cd_dsp_w()
+{
+	uchar data = get_hl8( cmd.ea );
+	cmd.auxpref = data & 1 ? condition_t::ne : condition_t::eq;
+	cmd.auxpref |= (memex_t::w + 1) << 4;
+	cmd.Op1.type = o_near;
+	cmd.Op1.dtyp = dt_code;
+
+	cmd.Op1.addr = cmd.ea + get_hl16( cmd.ea + 1);
+	cmd.size = 3;
+}
+
+void b1_dsp()
+{
+	uint disp = get_hl8( cmd.ea ) & 7;
+	if (disp < 3)
+		disp += 8;
+
+	cmd.Op1.type = o_near;
+	cmd.Op1.dtyp = dt_code;
+	cmd.auxpref |= (memex_t::s + 1) << 4;
+	cmd.Op1.addr = cmd.ea + disp;
+	cmd.size = 1;
+}
+
+void b1_pcdsp8()
+{
+	cmd.Op1.type = o_near;
+	cmd.Op1.dtyp = dt_code;
+	cmd.auxpref |= (memex_t::b + 1) << 4;
+	cmd.Op1.addr = cmd.ea + get_hl8( cmd.ea + 1 );
+	cmd.size = 2;
+}
+
+void b1_pcdsp16()
+{
+	cmd.Op1.type = o_near;
+	cmd.Op1.dtyp = dt_code;
+	cmd.auxpref |= (memex_t::w + 1) << 4;
+	cmd.Op1.addr = cmd.ea + get_hl16( cmd.ea + 1 );
+	cmd.size = 3;
+}
+
+void b1_pcdsp24()
+{
+	cmd.Op1.type = o_near;
+	cmd.Op1.dtyp = dt_code;
+	cmd.auxpref |= (memex_t::a + 1) << 4;
+	cmd.Op1.addr = cmd.ea + get_hl24( cmd.ea + 1 );
+	cmd.size = 4;
 }
 
 void b1_imm4_rd()
@@ -181,14 +262,6 @@ void b1_no_args()
 	cmd.size = 1;
 }
 
-void b1_pc_dsp16()
-{
-}
-
-void b1_pc_dsp24()
-{
-}
-
 void b1_rd_rd2_imm8()
 {
 }
@@ -203,6 +276,13 @@ void b1_uimm8()
 
 void b2_cb()
 {
+	uchar flag = get_hl8( cmd.ea + 1 ) & 0xf;
+	if ((flag > 3 && flag < 8) || flag >9)
+		return;
+
+	cmd.size = 2;
+	cmd.Op1.type = o_flag;
+	cmd.Op1.value = flag;
 }
 
 void b2_cr()
@@ -211,6 +291,45 @@ void b2_cr()
 
 void b2_cr_rd()
 {
+}
+
+void b2_imm3_ld_rd_cd()
+{
+	uchar data0 = get_hl8( cmd.ea + 1 );
+	uchar data1 = get_hl8( cmd.ea + 2 );
+
+	uchar cd = data1 & 0xf;
+
+	if (cd == 0xe || cd == 0xf)
+		return;
+
+	ld_t ld = (ld_t) ( data0 & 3 );
+
+	cmd.Op1.type = o_imm;
+	cmd.Op1.dtyp = dt_byte;
+	cmd.Op1.value = (data0 >> 2) & 7;
+
+	cmd.auxpref = cd;
+
+	cmd.size = 3 + set_displ(cmd.Op2, ld, memex_t::b, data1 >> 4, cmd.ea + 3);
+}
+
+void b2_imm5_cd_rd()
+{
+	uchar data = get_hl8( cmd.ea + 2 );
+
+	uchar cd = data >> 4;
+	if (cd == 0xe || cd == 0xf)
+		return;
+
+	cmd.Op1.type = o_imm;
+	cmd.Op1.dtyp = dt_byte;
+	cmd.Op1.value = get_hl8( cmd.ea + 1 ) & 0x1f;
+
+	cmd.auxpref = cd;
+
+	set_reg(cmd.Op2, data & 0xf);
+	cmd.size = 3;
 }
 
 void b2_imm5_rd()
@@ -248,6 +367,12 @@ void b2_ld_rd_rs()
 
 void b2_ld_rs_rd()
 {
+	uchar data = get_hl8( cmd.ea + 2 );
+
+	ld_t ld = (ld_t)(get_hl8( cmd.ea + 1 ) & 3);
+
+	cmd.size = 3 + set_displ(cmd.Op1, ld, memex_t::ub, data >> 4, cmd.ea + 3);
+	set_reg(cmd.Op2, data & 0xf);
 }
 
 void b2_ld_rs_sz()
@@ -298,6 +423,13 @@ void b2_rd_rs_rs2()
 	cmd.size = 3;
 }
 
+void b2_rs()
+{
+	cmd.auxpref |= (memex_t::l + 1) << 4;
+	set_reg(cmd.Op1, get_hl8( cmd.ea + 1) & 0xf);
+	cmd.size = 2;
+}
+
 void b2_rs_rd()
 {
 	uchar data = get_hl8( cmd.ea + 2 );
@@ -308,13 +440,14 @@ void b2_rs_rd()
 
 void b2_rs2_uimm8()
 {
+	cmd.Op1.type = o_imm;
+	cmd.Op1.dtyp = dt_byte;
+	cmd.Op1.value = get_hl8( cmd.ea + 2 );
+	set_reg(cmd.Op2, get_hl8( cmd.ea + 1 ) & 0xf);
+	cmd.size = 3;
 }
 
 void b2_rs_cr()
-{
-}
-
-void b2_rs()
 {
 }
 
@@ -328,10 +461,26 @@ void b2_sz_rs()
 
 void b3_imm3_ld_rd()
 {
+	uchar data0 = get_hl8( cmd.ea + 1 );
+	uchar data1 = get_hl8( cmd.ea + 2 );
+
+	ld_t ld = (ld_t)(data0 & 3);
+
+	cmd.Op1.type = o_imm;
+	cmd.Op1.dtyp = dt_byte;
+	cmd.Op1.value = (data0 >> 2) & 7;
+
+	cmd.size = 3 + set_displ(cmd.Op2, ld, memex_t::b, data1 >> 4, cmd.ea + 3);
 }
 
 void b3_imm5_rd()
 {
+	cmd.Op1.type = o_imm;
+	cmd.Op1.dtyp = dt_byte;
+	cmd.Op1.value = get_hl8( cmd.ea + 1 ) & 0x1f;
+
+	set_reg( cmd.Op2, get_hl8( cmd.ea + 2 ) & 0xf );
+	cmd.size = 3;
 }
 
 void b3_ld_rs_rd()
@@ -361,6 +510,14 @@ void b3_li_rd()
 
 void b3_mi_ld_rs_rd()
 {
+	uchar data0 = get_hl8( cmd.ea + 1 );
+	uchar data1 = get_hl8( cmd.ea + 3 );
+
+	memex_t memex = (memex_t)(data0 >> 6);
+	ld_t ld = (ld_t)(data0 & 3);
+	
+	cmd.size = 4 + set_displ(cmd.Op1, ld, memex, data1 >> 4, cmd.ea + 3);
+	set_reg(cmd.Op2, data1 & 0xf);
 }
 
 void b3_rd_imm32()
@@ -380,20 +537,26 @@ struct function_desc_t
 
 static struct function_desc_t function_descs[] = 
 {
-	{ &b1_cd_dsp,		1, { 0xf0 } },
+	{ &b1_cd_dsp_s,		1, { 0xf0 } },
+	{ &b1_cd_dsp_b,		1, { 0xf0 } },
+	{ &b1_cd_dsp_w,		1, { 0xfe } },
+	{ &b1_dsp,			1, { 0xf8 } },
 	{ &b1_imm4_rd,		1, { 0xff } },
 	{ &b1_imm5_rd,		1, { 0xfe } },
 	{ &b1_ld_rs_rd,		1, { 0xfc } },
 	{ &b1_li_rs2_rd,	1, { 0xfc } },
 	{ &b1_no_args,		1, { 0xff } },
-	{ &b1_pc_dsp16,		1, { 0xff } },
-	{ &b1_pc_dsp24,		1, { 0xff } },
+	{ &b1_pcdsp8,		1, { 0xff } },
+	{ &b1_pcdsp16,		1, { 0xff } },
+	{ &b1_pcdsp24,		1, { 0xff } },
 	{ &b1_rd_rd2_imm8,	1, { 0xff } },
 	{ &b1_rs_rs2,		1, { 0xff } },
 	{ &b1_uimm8,		1, { 0xff } },
 	{ &b2_cb,			2, { 0xff, 0xf0 } },
 	{ &b2_cr,			2, { 0xff, 0xf0 } },
 	{ &b2_cr_rd,		2, { 0xff, 0xff } },
+	{ &b2_imm3_ld_rd_cd,2, { 0xff, 0xe0 } },
+	{ &b2_imm5_cd_rd,	2, { 0xff, 0xe0 } }, 
 	{ &b2_imm5_rd,		2, { 0xff, 0xfe } },
 	{ &b2_imm5_rs2_rd,	2, { 0xff, 0xe0 } },
 	{ &b2_imm8,			2, { 0xff, 0xff } },
@@ -453,9 +616,60 @@ static struct opcode_t opcodes[] = {
 	{ RX63_bclr,	&b2_ld_rd_rs,		{ 0xfc, 0x64 } },
 	{ RX63_bclr,	&b1_imm5_rd,		{ 0x7a } },
 
-	{ RX63_b,		&b1_cd_dsp,			{ 0x10 }},
+	{ RX63_b,		&b1_cd_dsp_s,		{ 0x10 } },
+	{ RX63_b,		&b1_cd_dsp_b,		{ 0x20 } },
+	{ RX63_b,		&b1_cd_dsp_w,		{ 0x3a } },
+
+	{ RX63_bm,		&b2_imm3_ld_rd_cd,	{ 0xfc, 0xe0 } },
+	{ RX63_bm,		&b2_imm5_cd_rd,		{ 0xfd, 0xe0 } },
+
+	{ RX63_bnot,	&b3_imm3_ld_rd,		{ 0xfc, 0xe0, 0x0f } },
+	{ RX63_bnot,	&b2_ld_rd_rs,		{ 0xfc, 0x6c } },
+	{ RX63_bnot,	&b3_imm5_rd,		{ 0xfd, 0xe0, 0xf0 } },
+
+	{ RX63_bra,		&b1_dsp,			{ 0x08 } },
+	{ RX63_bra,		&b1_pcdsp8,			{ 0x2e } },
+	{ RX63_bra,		&b1_pcdsp16,		{ 0x38 } },
+	{ RX63_bra,		&b1_pcdsp24,		{ 0x04 } },
+	{ RX63_bra,		&b2_rs,				{ 0x7f, 0x40 } },
 
 	{ RX63_brk,		&b1_no_args,		{ 0x00 } },
+
+	{ RX63_bset,	&b2_ld_rd_imm3,		{ 0xf0, 0x00 } },
+	{ RX63_bset,	&b2_ld_rd_rs,		{ 0xfc, 0x60 } },
+	{ RX63_bset,	&b1_imm5_rd,		{ 0x78 } },
+
+	{ RX63_bsr,		&b1_pcdsp16,		{ 0x39 } },
+	{ RX63_bsr,		&b1_pcdsp24,		{ 0x05 } },
+	{ RX63_bsr,		&b2_rs,				{ 0x7f, 0x50 } },
+
+	{ RX63_btst,	&b2_ld_rd_imm3,		{ 0xf4, 0x00 } },
+	{ RX63_btst,	&b2_ld_rd_rs,		{ 0xfc, 0x68 } },
+	{ RX63_btst,	&b1_imm5_rd,		{ 0x7c } },
+
+	{ RX63_clrpsw,	&b2_cb,				{ 0x7f, 0xb0 } },
+
+	{ RX63_cmp,		&b1_imm4_rd,		{ 0x61 } },
+	{ RX63_cmp,		&b2_rs2_uimm8,		{ 0x75, 0x50 } },
+	{ RX63_cmp,		&b2_li_rd,			{ 0x74, 0x00 } },
+	{ RX63_cmp,		&b1_ld_rs_rd,		{ 0x44 } },
+	{ RX63_cmp,		&b2_mi_ld_rs_rd,	{ 0x06, 0x04 } },
+
+	{ RX63_div,		&b3_li_rd,			{ 0xfd, 0x70, 0x80 } },
+	{ RX63_div,		&b2_ld_rs_rd,		{ 0xfc, 0x20 } },
+	{ RX63_div,		&b3_mi_ld_rs_rd,	{ 0x06, 0x20, 0x08 } },
+
+	{ RX63_divu,	&b3_li_rd,			{ 0xfd, 0x70, 0x90 } },
+	{ RX63_divu,	&b2_ld_rs_rd,		{ 0xfc, 0x24 } },
+	{ RX63_divu,	&b3_mi_ld_rs_rd,	{ 0x06, 0x20, 0x09 } },
+
+	{ RX63_emul,	&b3_li_rd,			{ 0xfd, 0x70, 0x60 } },
+	{ RX63_emul,	&b2_ld_rs_rd,		{ 0xfc, 0x18 } },
+	{ RX63_emul,	&b3_mi_ld_rs_rd,	{ 0x06, 0x20, 0x06 } },
+
+	{ RX63_emulu,	&b3_li_rd,			{ 0xfd, 0x70, 0x70 } },
+	{ RX63_emulu,	&b2_ld_rs_rd,		{ 0xfc, 0x1c } },
+	{ RX63_emulu,	&b3_mi_ld_rs_rd,	{ 0x06, 0x20, 0x07 } },
 };
 
 enum parse_result_t 
@@ -511,8 +725,15 @@ int idaapi ana( void )
 			{
 				cmd.itype = opcodes[i].instruction;
 				opcodes[i].function();
-				fl_exit = true;;
-				break;
+				if (cmd.size != 0)
+				{
+					fl_exit = true;;
+					break;
+				}
+				else
+				{
+					nomatches[i] = true;
+				}
 			}
 			else if (res == parse_result_t::nomatch)
 			{

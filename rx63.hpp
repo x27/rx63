@@ -16,34 +16,47 @@ enum RX63_registers
 
 #define memex specflag1
 #define ld specflag2
+#define o_flag o_idpspec0
 
 enum memex_t
 {
-	b = 0,
-	w = 1,
-	l = 2,
-	uw = 3,
-	ub = 4
+	b	= 0,
+	w	= 1,
+	l	= 2,
+	uw	= 3,
+	ub	= 4,
+	s	= 5,
+	a	= 6,
+};
+
+enum cflag_t
+{
+	flag_c = 0,
+	flag_z = 1,
+	flag_s = 2,
+	flag_o = 3,
+	flag_i = 8,
+	flag_u = 9,
 };
 
 enum condition_t
 {
-	eq = 0,
-	ne = 1,
-	c = 2,
-	nc = 3,
-	gtu = 4,
-	leu = 5,
-	pz = 6,
-	n = 7,
-	ge = 8,
-	lt = 9,
-	gt = 10,
-	le = 11,
-	o = 12,
-	no = 13,
-	bra = 14,
-	none = 15
+	eq		= 0,
+	ne		= 1,
+	c		= 2,
+	nc		= 3,
+	gtu		= 4,
+	leu		= 5,
+	pz		= 6,
+	n		= 7,
+	ge		= 8,
+	lt		= 9,
+	gt		= 10,
+	le		= 11,
+	o		= 12,
+	no		= 13,
+	bra		= 14,
+	none	= 15
 };
 
 enum ld_t

@@ -5,6 +5,13 @@ static const char * const ccode[] =
 	"eq", "ne", "c", "nc", "gtu", "leu", "pz", "n", "ge", "lt", "gt", "le", "o", "no", "bra", ""
 };
 
+static const char * const cmemex[] =
+{
+	".b", ".w", ".l", ".uw", ".ub", ".s", ".a"
+};
+
+
+
 inline void out_reg(int rgnum)
 {
 	out_register(ph.regNames[rgnum]);
@@ -55,9 +62,22 @@ void idaapi segend(ea_t ea)
 void idaapi out(void)
 {
 	char buf[MAXSTR];
-	init_output_buffer(buf, sizeof(buf));     // setup the output pointer
+	init_output_buffer(buf, sizeof(buf));
 
-	OutMnem();
+	char cond_postfix[6];
+	cond_postfix[0] = '\0';
+
+	if ((cmd.auxpref & 0xf) != condition_t::none)
+	{
+		qstrncat(cond_postfix, ccode[cmd.auxpref & 0xf], sizeof(cond_postfix));
+	}
+
+	if ((cmd.auxpref >> 4) != 0)
+	{
+		qstrncat(cond_postfix, cmemex[(cmd.auxpref >> 4) - 1], sizeof(cond_postfix));
+	}
+
+	OutMnem(8, cond_postfix);
 
 	out_one_operand(0);
 
@@ -138,6 +158,31 @@ bool idaapi outop(op_t &x)
 			if ( !out_name_expr(x, toEA(cmd.cs, x.addr), x.addr) )
 				OutValue(x, OOF_ADDR | OOF_NUMBER | OOFS_NOSIGN | OOFW_32);
 			break;
+
+		case o_flag:
+			switch(cmd.Op1.value & 0xf)
+			{
+				case cflag_t::flag_c:
+					out_symbol('c');
+					break;
+				case cflag_t::flag_z:
+					out_symbol('z');
+					break;
+				case cflag_t::flag_s:
+					out_symbol('s');
+					break;
+				case cflag_t::flag_o:
+					out_symbol('o');
+					break;
+				case cflag_t::flag_i:
+					out_symbol('i');
+					break;
+				case cflag_t::flag_u:
+					out_symbol('u');
+					break;
+			}
+			break;
+
 	}
 	return 1;
 }

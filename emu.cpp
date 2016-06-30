@@ -82,6 +82,7 @@ static void handle_operand(const op_t &op, bool loading)
     // Phrase - register - void : do nothing
     case o_reg:
     case o_void:
+	case o_flag:
         break;
 
     // Others types should never be called
