@@ -16,7 +16,15 @@ enum RX63_registers
 
 #define memex specflag1
 #define ld specflag2
+#define phrase_type specflag3
 #define o_flag o_idpspec0
+
+enum rx63_phrases
+{
+	f_r_plus,		// [r+]
+	f_r_minus,		// [-r]
+	f_r_r,			// [r,r]
+};
 
 enum memex_t
 {
@@ -61,7 +69,7 @@ enum condition_t
 
 enum ld_t
 {
-	in_reg = 0, // @reg
+	in_reg = 0, // [reg]
 	dsp8 = 1,
 	dsp16 = 2,
 	reg = 3	// reg

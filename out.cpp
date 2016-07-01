@@ -183,6 +183,28 @@ bool idaapi outop(op_t &x)
 			}
 			break;
 
+		case o_phrase:
+			out_symbol('[');
+			switch(x.phrase_type)
+			{
+				case rx63_phrases::f_r_r:
+					out_reg(x.value&0xf);
+					out_symbol(',');
+					out_symbol(' ');
+					out_reg(x.reg);
+					break;
+				case rx63_phrases::f_r_plus:
+					out_reg(x.reg);
+					out_symbol('+');
+					break;
+				case rx63_phrases::f_r_minus:
+					out_symbol('-');
+					out_reg(x.reg);
+					break;
+			}
+			out_symbol(']');
+			break;
+
 	}
 	return 1;
 }

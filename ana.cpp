@@ -236,6 +236,23 @@ void b1_imm5_rd()
 	set_reg(cmd.Op2, data1 & 0xf);
 }
 
+void b1_ld_rd_li_sz()
+{
+	ld_t ld = (ld_t)(get_hl8( cmd.ea ) & 3);
+	if (ld == 3)
+		return;
+
+	uchar data = get_hl8( cmd.ea + 1);
+	memex_t sz = (memex_t) (data & 3);
+	if (sz == 3)
+		return;
+
+	cmd.size = 2 + set_displ(cmd.Op2, ld, sz, data >> 4, cmd.ea + 2);
+
+	simm_t li = (simm_t)( (data >> 2) && 3);
+	cmd.size += (cmd.Op1, li, cmd.size );
+}
+
 void b1_ld_rs_rd()
 {
 	uchar data0 = get_hl8( cmd.ea );
@@ -268,6 +285,95 @@ void b1_rd_rd2_imm8()
 
 void b1_rs_rs2()
 {
+}
+
+void b1_sz_ld_rs_rd()
+{
+	uchar data0 = get_hl8( cmd.ea );
+	uchar data1 = get_hl8( cmd.ea + 1 );
+
+	memex_t sz = (memex_t)(( data0 >> 4 ) & 3);
+	if (sz == 3)
+		return;
+
+	ld_t ld = (ld_t) ( data0 & 3 );
+	if (ld == 3)
+		return;
+
+	cmd.size = 2 + set_displ(cmd.Op1, ld, sz, data1 >> 4, cmd.ea + 2);
+}
+
+void b1_sz_rd7_rs()
+{
+	uchar data0 = get_hl8( cmd.ea );
+	uchar data1 = get_hl8( cmd.ea + 1 );
+
+	memex_t sz = (memex_t)(( data0 >> 4 ) & 3);
+	if (sz == 3)
+		return;
+
+	cmd.auxpref |= (sz + 1) << 4;
+
+	set_reg(cmd.Op1, data1 & 7);
+
+	uchar dsp = get_scale( sz ) * ((data0 & 7) << 2) | ((data1 >> 6) & 2) | ((data1 >> 3) & 1);
+	set_displ_reg(cmd.Op2, (data1 >> 4) & 7, dsp, sz);
+	cmd.size = 2;
+}
+
+void b1_sz_rd()
+{
+	uchar data0 = get_hl8( cmd.ea );
+	uchar data1 = get_hl8( cmd.ea + 1 );
+
+	memex_t sz = (memex_t)(( data0 >> 4 ) & 3);
+	if (sz == 3)
+		return;
+
+	cmd.auxpref |= (sz + 1) << 4;
+
+	cmd.Op1.type = o_imm;
+	cmd.Op1.value = get_hl8( cmd.ea + 2 );
+
+	uchar dsp = get_scale( sz ) * (((data1 & 0x80) >> 3) | (data1  & 0xf));
+	set_displ_reg(cmd.Op2, (data1 >> 4) & 7, dsp, sz);
+
+	cmd.size = 3;
+}
+
+void b1_sz_rs_rd()
+{
+	uchar data0 = get_hl8( cmd.ea );
+	uchar data1 = get_hl8( cmd.ea + 1 );
+
+	memex_t sz = (memex_t)(( data0 >> 4 ) & 3);
+	if (sz == 3)
+		return;
+
+	cmd.auxpref |= (sz + 1) << 4;
+
+	set_reg(cmd.Op1, data1 >> 4);
+	set_reg(cmd.Op2, data1 & 0xf);
+
+	cmd.size = 2;
+}
+
+void b1_sz_rs7_rd7()
+{
+	uchar data0 = get_hl8( cmd.ea );
+	uchar data1 = get_hl8( cmd.ea + 1 );
+
+	memex_t sz = (memex_t)(( data0 >> 4 ) & 3);
+	if (sz == 3)
+		return;
+
+	cmd.auxpref |= (sz + 1) << 4;
+
+	set_reg(cmd.Op2, data1 & 7);
+
+	uchar dsp = get_scale( sz ) * ((data0 & 7) << 2) | ((data1 >> 6) & 2) | ((data1 >> 3) & 1);
+	set_displ_reg(cmd.Op1, (data1 >> 4) & 7, dsp, sz);
+	cmd.size = 2;
 }
 
 void b1_uimm8()
@@ -342,6 +448,10 @@ void b2_imm5_rs2_rd()
 
 void b2_imm8()
 {
+	cmd.Op1.type = o_imm;
+	cmd.Op1.dtyp = dt_byte;
+	cmd.Op1.value = get_hl8( cmd.ea + 2 );
+	cmd.size = 3;
 }
 
 void b2_ld_rd_imm3()
@@ -365,7 +475,7 @@ void b2_ld_rd_rs()
 	cmd.size = 3 + set_displ(cmd.Op2, ld, memex_t::b, data >> 4, cmd.ea + 3);
 }
 
-void b2_ld_rs_rd()
+void b2_ld_rs_rd_ub()
 {
 	uchar data = get_hl8( cmd.ea + 2 );
 
@@ -374,6 +484,17 @@ void b2_ld_rs_rd()
 	cmd.size = 3 + set_displ(cmd.Op1, ld, memex_t::ub, data >> 4, cmd.ea + 3);
 	set_reg(cmd.Op2, data & 0xf);
 }
+
+void b2_ld_rs_rd_l()
+{
+	uchar data = get_hl8( cmd.ea + 2 );
+
+	ld_t ld = (ld_t)(get_hl8( cmd.ea + 1 ) & 3);
+
+	cmd.size = 3 + set_displ(cmd.Op1, ld, memex_t::l, data >> 4, cmd.ea + 3);
+	set_reg(cmd.Op2, data & 0xf);
+}
+
 
 void b2_ld_rs_sz()
 {
@@ -409,6 +530,14 @@ void b2_rd()
 	uchar data = get_hl8( cmd.ea + 1 );
 	cmd.size = 2;
 	set_reg(cmd.Op1, data & 0x0f);
+}
+
+void b2_rd_li()
+{
+	uchar data = get_hl8 ( cmd.ea + 1 );
+	simm_t li = (simm_t)( (data >> 2) & 3);
+	cmd.size = 2 + set_imm(cmd.Op1, li, cmd.ea + 2);
+	set_reg(cmd.Op2, (data >> 4) & 0xf);
 }
 
 void b2_rd_rs_rs2()
@@ -453,6 +582,19 @@ void b2_rs_cr()
 
 void b2_sz()
 {
+}
+
+void b2_sz_ri_rb_rd()
+{
+	uchar data0 = get_hl8( cmd.ea + 1 );
+	uchar data1 = get_hl8( cmd.ea + 2 );
+
+	memex_t sz = (memex_t)(( data0 >> 4 ) & 3);
+	if (sz == 3)
+		return;
+
+	cmd.auxpref |= (sz + 1) << 4;
+
 }
 
 void b2_sz_rs()
@@ -522,6 +664,12 @@ void b3_mi_ld_rs_rd()
 
 void b3_rd_imm32()
 {
+	cmd.Op1.type = o_imm;
+	cmd.Op1.dtyp = dt_dword;
+	cmd.Op1.value = get_hl32( cmd.ea + 3 );
+
+	set_reg(cmd.Op2, get_hl8( cmd.ea + 2) & 0xf);
+	cmd.size = 7;
 }
 
 void b3_rd()
@@ -543,6 +691,7 @@ static struct function_desc_t function_descs[] =
 	{ &b1_dsp,			1, { 0xf8 } },
 	{ &b1_imm4_rd,		1, { 0xff } },
 	{ &b1_imm5_rd,		1, { 0xfe } },
+	{ &b1_ld_rd_li_sz,	1, { 0xfc } },
 	{ &b1_ld_rs_rd,		1, { 0xfc } },
 	{ &b1_li_rs2_rd,	1, { 0xfc } },
 	{ &b1_no_args,		1, { 0xff } },
@@ -551,6 +700,11 @@ static struct function_desc_t function_descs[] =
 	{ &b1_pcdsp24,		1, { 0xff } },
 	{ &b1_rd_rd2_imm8,	1, { 0xff } },
 	{ &b1_rs_rs2,		1, { 0xff } },
+	{ &b1_sz_ld_rs_rd,	1, { 0xcc } },
+	{ &b1_sz_rd,		1, { 0xfc } },
+	{ &b1_sz_rd7_rs,	1, { 0xc8 } },
+	{ &b1_sz_rs_rd,		1, { 0xcf } },
+	{ &b1_sz_rs7_rd7,	1, { 0xc8 } },
 	{ &b1_uimm8,		1, { 0xff } },
 	{ &b2_cb,			2, { 0xff, 0xf0 } },
 	{ &b2_cr,			2, { 0xff, 0xf0 } },
@@ -562,18 +716,21 @@ static struct function_desc_t function_descs[] =
 	{ &b2_imm8,			2, { 0xff, 0xff } },
 	{ &b2_ld_rd_imm3,	2, { 0xfc, 0x08 } },
 	{ &b2_ld_rd_rs,		2, { 0xff, 0xfc } },
-	{ &b2_ld_rs_rd,		2, { 0xff, 0xfc } },
+	{ &b2_ld_rs_rd_ub,	2, { 0xff, 0xfc } },
+	{ &b2_ld_rs_rd_l,	2, { 0xff, 0xfc } },
 	{ &b2_ld_rs_sz,		2, { 0xfc, 0x0c } },
 	{ &b2_li_rd,		2, { 0xfc, 0xf0 } },
 	{ &b2_mi_ld_rs_rd,	2, { 0xff, 0x3c } },
 	{ &b2_no_args,		2, { 0xff, 0xff } },
 	{ &b2_rd,			2, { 0xff, 0xf0 } },
+	{ &b2_rd_li,		2, { 0xff, 0x03 } },
 	{ &b2_rd_rs_rs2,	2, { 0xff, 0xf0 } }, 
 	{ &b2_rs2_uimm8,	2, { 0xff, 0xf0 } },
 	{ &b2_rs_cr,		2, { 0xff, 0xff } },
 	{ &b2_rs,			2, { 0xff, 0xf0 } },
 	{ &b2_rs_rd,		2, { 0xff, 0xff } },
 	{ &b2_sz,			2, { 0xff, 0xfc } },
+	{ &b2_sz_ri_rb_rd,	2, { 0xff, 0x40 } },
 	{ &b2_sz_rs,		2, { 0xff, 0xc0 } },
 	{ &b3_imm3_ld_rd,	3, { 0xff, 0xe0, 0x0f } },
 	{ &b3_imm5_rd,		3, { 0xff, 0xe0, 0xf0 } },
@@ -655,21 +812,72 @@ static struct opcode_t opcodes[] = {
 	{ RX63_cmp,		&b1_ld_rs_rd,		{ 0x44 } },
 	{ RX63_cmp,		&b2_mi_ld_rs_rd,	{ 0x06, 0x04 } },
 
+	// bottom not checked
+
 	{ RX63_div,		&b3_li_rd,			{ 0xfd, 0x70, 0x80 } },
-	{ RX63_div,		&b2_ld_rs_rd,		{ 0xfc, 0x20 } },
+	{ RX63_div,		&b2_ld_rs_rd_ub,	{ 0xfc, 0x20 } },
 	{ RX63_div,		&b3_mi_ld_rs_rd,	{ 0x06, 0x20, 0x08 } },
 
 	{ RX63_divu,	&b3_li_rd,			{ 0xfd, 0x70, 0x90 } },
-	{ RX63_divu,	&b2_ld_rs_rd,		{ 0xfc, 0x24 } },
+	{ RX63_divu,	&b2_ld_rs_rd_ub,	{ 0xfc, 0x24 } },
 	{ RX63_divu,	&b3_mi_ld_rs_rd,	{ 0x06, 0x20, 0x09 } },
 
 	{ RX63_emul,	&b3_li_rd,			{ 0xfd, 0x70, 0x60 } },
-	{ RX63_emul,	&b2_ld_rs_rd,		{ 0xfc, 0x18 } },
+	{ RX63_emul,	&b2_ld_rs_rd_ub,	{ 0xfc, 0x18 } },
 	{ RX63_emul,	&b3_mi_ld_rs_rd,	{ 0x06, 0x20, 0x06 } },
 
 	{ RX63_emulu,	&b3_li_rd,			{ 0xfd, 0x70, 0x70 } },
-	{ RX63_emulu,	&b2_ld_rs_rd,		{ 0xfc, 0x1c } },
+	{ RX63_emulu,	&b2_ld_rs_rd_ub,	{ 0xfc, 0x1c } },
 	{ RX63_emulu,	&b3_mi_ld_rs_rd,	{ 0x06, 0x20, 0x07 } },
+
+	{ RX63_fadd,	&b3_rd_imm32,		{ 0xfd, 0x72, 0x20 } },
+	{ RX63_fadd,	&b2_ld_rs_rd_l,		{ 0xfc, 0x88 } },
+
+	{ RX63_fcmp,	&b3_rd_imm32,		{ 0xfd, 0x72, 0x10 } },
+	{ RX63_fcmp,	&b2_ld_rs_rd_l,		{ 0xfc, 0x84 } },
+
+	{ RX63_fdiv,	&b3_rd_imm32,		{ 0xfd, 0x72, 0x40 } },
+	{ RX63_fdiv,	&b2_ld_rs_rd_l,		{ 0xfc, 0x90 } },
+
+	{ RX63_fmul,	&b3_rd_imm32,		{ 0xfd, 0x72, 0x30 } },
+	{ RX63_fmul,	&b2_ld_rs_rd_l,		{ 0xfc, 0x8c } },
+
+	{ RX63_fsub,	&b3_rd_imm32,		{ 0xfd, 0x72, 0x00 } },
+	{ RX63_fsub,	&b2_ld_rs_rd_l,		{ 0xfc, 0x80 } },
+
+	{ RX63_ftoi,	&b2_ld_rs_rd_l,		{ 0xfc, 0x94 } },
+
+	{ RX63_int,		&b2_imm8,			{ 0x75, 0x60 } },
+
+	{ RX63_itof,	&b2_ld_rs_rd_ub,	{ 0xfc, 0x44 } },
+	{ RX63_itof,	&b3_mi_ld_rs_rd,	{ 0x06, 0x20, 0x11 } },
+
+	{ RX63_jmp,		&b2_rs,				{ 0x7f, 0x00 } },
+	{ RX63_jsr,		&b2_rs,				{ 0x7f, 0x10 } },
+
+	{ RX63_machi,	&b2_rs_rd,			{ 0xfd, 0x04 } },
+	{ RX63_maclo,	&b2_rs_rd,			{ 0xfd, 0x05 } },
+
+	{ RX63_max,		&b3_li_rd,			{ 0xfd, 0x70, 0x40 } },
+	{ RX63_max,		&b2_ld_rs_rd_ub,	{ 0xfc, 0x10 } },
+	{ RX63_max,		&b3_mi_ld_rs_rd,	{ 0x06, 0x20, 0x04 } },
+
+	{ RX63_min,		&b3_li_rd,			{ 0xfd, 0x70, 0x50 } },
+	{ RX63_min,		&b2_ld_rs_rd_ub,	{ 0xfc, 0x14 } },
+	{ RX63_min,		&b3_mi_ld_rs_rd,	{ 0x06, 0x20, 0x05 } },
+
+	{ RX63_mov,		&b1_sz_rd7_rs,		{ 0x80 } },
+	{ RX63_mov,		&b1_sz_rs7_rd7,		{ 0x88 } },
+	{ RX63_mov,		&b1_imm4_rd,		{ 0x66 } },
+	{ RX63_mov,		&b1_sz_rd,			{ 0x3c } },
+	{ RX63_mov,		&b2_rs2_uimm8,		{ 0x75, 0x40 } },
+	{ RX63_mov,		&b2_rd_li,			{ 0xfb, 0x02 } },
+	{ RX63_mov,		&b1_sz_rs_rd,		{ 0xcf } },
+	{ RX63_mov,		&b1_ld_rd_li_sz,	{ 0xf8 } },
+	{ RX63_mov,		&b1_sz_ld_rs_rd,	{ 0xcc } },
+	{ RX63_mov,		&b2_sz_ri_rb_rd,	{ 0xfe, 0x40 } },
+
+
 };
 
 enum parse_result_t 
