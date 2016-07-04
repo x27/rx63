@@ -18,12 +18,27 @@ enum RX63_registers
 #define ld specflag2
 #define phrase_type specflag3
 #define o_flag o_idpspec0
+#define o_creg o_idpspec1
+
+enum rx63_cregs
+{
+	cr_psw = 0,
+	cr_pc = 1,
+	cr_usp = 2,
+	cr_fpsw = 3,
+	cr_bpsw = 8,
+	cr_bpc = 9,
+	cr_isp = 10,
+	cr_fintv = 11,
+	cr_intb = 12
+};
 
 enum rx63_phrases
 {
 	f_r_plus,		// [r+]
 	f_r_minus,		// [-r]
 	f_r_r,			// [r,r]
+	f_r_2_r			// r-r
 };
 
 enum memex_t

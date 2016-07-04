@@ -10,6 +10,10 @@ static const char * const cmemex[] =
 	".b", ".w", ".l", ".uw", ".ub", ".s", ".a"
 };
 
+static const char * const cregs[] =
+{
+	"psw", "pc", "usp", "fpsw", "", "", "", "", "bpsw", "bpc", "isp", "fintv", "intb", "", "", ""
+};
 
 
 inline void out_reg(int rgnum)
@@ -160,7 +164,7 @@ bool idaapi outop(op_t &x)
 			break;
 
 		case o_flag:
-			switch(cmd.Op1.value & 0xf)
+			switch(x.value & 0xf)
 			{
 				case cflag_t::flag_c:
 					out_symbol('c');
@@ -182,27 +186,39 @@ bool idaapi outop(op_t &x)
 					break;
 			}
 			break;
+		case o_creg:
+			out_register(cregs[x.value & 0xf]);
+			break;
 
 		case o_phrase:
-			out_symbol('[');
 			switch(x.phrase_type)
 			{
 				case rx63_phrases::f_r_r:
+					out_symbol('[');
 					out_reg(x.value&0xf);
 					out_symbol(',');
 					out_symbol(' ');
 					out_reg(x.reg);
+					out_symbol(']');
 					break;
 				case rx63_phrases::f_r_plus:
+					out_symbol('[');
 					out_reg(x.reg);
 					out_symbol('+');
+					out_symbol(']');
 					break;
 				case rx63_phrases::f_r_minus:
+					out_symbol('[');
+					out_symbol('-');
+					out_reg(x.reg);
+					out_symbol(']');
+					break;
+				case rx63_phrases::f_r_2_r:
+					out_reg(x.value&0xf);
 					out_symbol('-');
 					out_reg(x.reg);
 					break;
 			}
-			out_symbol(']');
 			break;
 
 	}
