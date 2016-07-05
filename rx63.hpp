@@ -50,6 +50,7 @@ enum memex_t
 	ub	= 4,
 	s	= 5,
 	a	= 6,
+	dont_show = 0x10
 };
 
 enum cflag_t

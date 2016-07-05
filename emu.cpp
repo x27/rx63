@@ -14,19 +14,19 @@ static void handle_operand(const op_t &op, bool loading)
   {
     // Address
     case o_near:
-    //  // branch label - create code reference (call or jump
-    //  // according to the instruction)
-    //  {
-    //    ea_t ea = toEA(cmd.cs, op.addr);
-    //    cref_t ftype = fl_JN;
-    //    if ( cmd.itype == m32r_bl && !handle_switch() )
-    //    {
-    //      if ( !func_does_return(ea) )
-    //        flow = false;
-    //      ftype = fl_CN;
-    //    }
-    //    ua_add_cref(op.offb, ea, ftype);
-    //  }
+      // branch label - create code reference (call or jump
+      // according to the instruction)
+      {
+        ea_t ea = toEA(cmd.cs, op.addr);
+        cref_t ftype = fl_JN;
+        if ( InstrIsSet(cmd.itype, CF_CALL) )
+        {
+          if ( !func_does_return(ea) )
+            flow = false;
+          ftype = fl_CN;
+        }
+        ua_add_cref(op.offb, ea, ftype);
+      }
       break;
 
     // Immediate
@@ -34,8 +34,8 @@ static void handle_operand(const op_t &op, bool loading)
     //  QASSERT(10135, loading);
 		handle_imm();
     //  // if the value was converted to an offset, then create a data xref:
-    //  if ( op_adds_xrefs(uFlag, op.n) )
-    //    ua_add_off_drefs2(op, dr_O, OOFW_IMM|OOF_SIGNED);
+      if ( op_adds_xrefs(uFlag, op.n) )
+        ua_add_off_drefs2(op, dr_O, OOFW_IMM|OOF_SIGNED);
 
     //  // create a comment if this immediate is represented in the .cfg file
     //  {
@@ -101,13 +101,13 @@ int idaapi emu(void)
 	if ( feature & CF_USE2)    handle_operand(cmd.Op2, 1 );
 	if ( feature & CF_USE3)    handle_operand(cmd.Op3, 1 );
 
-	//if ( feature & CF_JUMP)    QueueSet(Q_jumps, cmd.ea );
+	if ( feature & CF_JUMP)    QueueSet(Q_jumps, cmd.ea );
 
 	if ( feature & CF_CHG1)    handle_operand(cmd.Op1, 0 );
 	if ( feature & CF_CHG2)    handle_operand(cmd.Op2, 0 );
 	if ( feature & CF_CHG3)    handle_operand(cmd.Op3, 0 );
 
-	//if ( flow)    ua_add_cref(0, cmd.ea + cmd.size, fl_F );
+	if ( flow)    ua_add_cref(0, cmd.ea + cmd.size, fl_F );
 
 	return 1;
 }

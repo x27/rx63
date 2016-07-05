@@ -13,7 +13,7 @@ instruc_t Instructions[] = {
   { "and",		CF_USE1|CF_USE2|CF_CHG2 },			// Logical AND
   { "and",		CF_USE1|CF_USE2|CF_CHG3 },			// Logical AND
   { "bclr",		CF_USE1|CF_USE2|CF_CHG2 },			// Clearing a bit 
-  { "b",		CF_USE1||CF_JUMP },					// Relative conditional branch
+  { "b",		CF_USE1 },							// Relative conditional branch
   { "bm",		CF_USE1|CF_USE2|CF_CHG2 },			// Conditional bit transfer
   { "bnot",		CF_USE1|CF_USE2|CF_CHG2 },			// Inverting a bit
   { "bra",		CF_USE1|CF_STOP },					// Unconditional relative branch
@@ -79,7 +79,7 @@ instruc_t Instructions[] = {
   { "rte",		CF_STOP },							// Return from the exception
   { "rtfi",		CF_STOP },							// Return from the fast interrupt
   { "rts",		CF_STOP },							// Returning from a subroutine
-  { "rtsd",		CF_USE1 },							// Releasing stack frame and returning from subroutine
+  { "rtsd",		CF_USE1|CF_STOP },					// Releasing stack frame and returning from subroutine
   { "rtsd",		CF_USE1|CF_CHG2|CF_CHG3 },			// Releasing stack frame and returning from subroutine
   { "sat",		CF_CHG1 },							// Saturation of signed 32-bit data
   { "satr",		0 },								// Saturation of signed 64-bit data for RMPA

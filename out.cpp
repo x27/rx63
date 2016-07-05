@@ -1,5 +1,7 @@
 #include "rx63.hpp"
 
+//#define SHOWHEXCODES
+
 static const char * const ccode[] =
 {
 	"eq", "ne", "c", "nc", "gtu", "leu", "pz", "n", "ge", "lt", "gt", "le", "o", "no", "bra", ""
@@ -63,10 +65,28 @@ void idaapi segend(ea_t ea)
 	gen_cmt_line("end of '%s'", sname);
 }
 
+inline ea_t real_address( ea_t ea )
+{
+	return ( ea >> 2 << 2 ) + 3 - ( ea & 3 );
+}
+
 void idaapi out(void)
 {
 	char buf[MAXSTR];
 	init_output_buffer(buf, sizeof(buf));
+
+#ifdef SHOWHEXCODES
+	char bin[20];
+	bin[0] = '\0';
+	for(int i=0; i<cmd.size; i++)
+	{
+		char temp[10];
+		qsnprintf(temp, sizeof(temp), "%02X", get_full_byte( real_address( cmd.ea + i)));
+		qstrncat(bin, temp, sizeof(bin));
+	}
+	qstrncat(bin, " ", sizeof(bin));
+	OutLine(bin);
+#endif
 
 	char cond_postfix[6];
 	cond_postfix[0] = '\0';
@@ -132,27 +152,31 @@ bool idaapi outop(op_t &x)
 				out_symbol('[');
 				out_reg(x.reg);
 				out_symbol(']');
-				out_symbol('.');
-			
-				switch(x.memex)
+
+				// show memex?
+				if ((x.memex & 0x10) == 0)
 				{
-					case memex_t::l:
-						out_symbol('l');
-						break;
-					case memex_t::uw:
-						out_symbol('u');
-						out_symbol('w');
-						break;
-					case memex_t::b:
-						out_symbol('b');
-						break;
-					case memex_t::w:
-						out_symbol('w');
-						break;
-					case memex_t::ub:
-						out_symbol('u');
-						out_symbol('b');
-						break;
+					out_symbol('.');
+					switch(x.memex)
+					{
+						case memex_t::l:
+							out_symbol('l');
+							break;
+						case memex_t::uw:
+							out_symbol('u');
+							out_symbol('w');
+							break;
+						case memex_t::b:
+							out_symbol('b');
+							break;
+						case memex_t::w:
+							out_symbol('w');
+							break;
+						case memex_t::ub:
+							out_symbol('u');
+							out_symbol('b');
+							break;
+					}
 				}
 			}
 			break;

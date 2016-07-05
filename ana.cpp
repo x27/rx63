@@ -1,5 +1,7 @@
 #include "rx63.hpp"
 
+#define USE_REAL_ADDRESS
+
 enum simm_t 
 {
 	imm32	= 0,
@@ -26,15 +28,19 @@ void set_displ_reg(op_t &op, uint16 reg, uval_t value, memex_t memex)
 
 inline ea_t real_address( ea_t ea )
 {
-	return ( ea >> 2 << 2 ) + 3 - ( ea & 3 );
+#ifdef USE_REAL_ADDRESS
+	return (( ea >> 2 << 2 ) + 3 - ( ea & 3 ));
+#else
+	return ea;
+#endif
 }
 
-static uchar get_hl8( ea_t ea)
+uchar get_hl8( ea_t ea)
 {
-	return get_full_byte(ea);	//real_address( ea )
+	return (uchar) get_full_byte (real_address( ea ) );
 }
 
-static uint get_hl32( ea_t ea )
+uint get_hl32( ea_t ea )
 {
 	uint res = 0;
 	for( int i=3; i>=0; i-- )
@@ -45,7 +51,7 @@ static uint get_hl32( ea_t ea )
 	return res;
 }
 
-static uint get_hl24( ea_t ea )
+uint get_hl24( ea_t ea )
 {
 	uint res = 0;
 	for( int i=2; i>=0; i-- )
@@ -56,12 +62,26 @@ static uint get_hl24( ea_t ea )
 	return res;
 }
 
-static ushort get_hl16( ea_t ea )
+int get_signed_hl24( ea_t ea )
+{
+	uint res = get_hl24( ea );
+	if ((res & 0x800000) != 0)
+	{
+		return (int)(res | 0xff000000);
+	}
+	else
+	{
+		return res;
+	}
+}
+
+
+ushort get_hl16( ea_t ea )
 {
 	return (get_hl8( ea + 1) << 8 ) | get_hl8 ( ea );
 }
 
-static int set_imm(op_t &op, simm_t imm, ea_t ea) 
+int set_imm(op_t &op, simm_t imm, ea_t ea) 
 {
 	int size = 0;
 	op.type = o_imm;
@@ -88,16 +108,16 @@ static int set_imm(op_t &op, simm_t imm, ea_t ea)
 			op.dtyp = dt_3byte;
 			break;
 	}
-//	msg("set_imm size:%d\n", size);
 	return size;
 }
 
-int get_scale(memex_t memex)
+int get_scale(memex_t mem)
 {
+	memex_t m = (memex_t)(mem & 0xf);
 	int scale = 1;
-	if ( memex_t::w == memex || memex_t::uw == memex )
+	if ( memex_t::w == m || memex_t::uw == m )
 		scale = 2;
-	else if ( memex_t::l == memex )
+	else if ( memex_t::l == m )
 		scale = 4;
 	return scale;
 }
@@ -116,6 +136,7 @@ int set_displ(op_t &op, ld_t ld, memex_t memex, uval_t reg, ea_t ea)
 	else if (ld == ld_t::dsp16)
 	{
 		uval_t value = get_scale(memex) * get_hl16( ea );
+		msg("value %a %a\n", ea, value);
 		set_displ_reg(op, reg, value, memex);
 		res = 2;
 	}
@@ -159,7 +180,7 @@ void b1_cd_dsp_b()
 	cmd.Op1.type = o_near;
 	cmd.Op1.dtyp = dt_code;
 
-	cmd.Op1.addr = cmd.ea + get_hl8( cmd.ea + 1);
+	cmd.Op1.addr = cmd.ea + (char)get_hl8( cmd.ea + 1);
 	cmd.size = 2;
 }
 
@@ -171,7 +192,7 @@ void b1_cd_dsp_w()
 	cmd.Op1.type = o_near;
 	cmd.Op1.dtyp = dt_code;
 
-	cmd.Op1.addr = cmd.ea + get_hl16( cmd.ea + 1);
+	cmd.Op1.addr = cmd.ea + (short)get_hl16( cmd.ea + 1);
 	cmd.size = 3;
 }
 
@@ -193,7 +214,7 @@ void b1_pcdsp8()
 	cmd.Op1.type = o_near;
 	cmd.Op1.dtyp = dt_code;
 	cmd.auxpref |= (memex_t::b + 1) << 4;
-	cmd.Op1.addr = cmd.ea + get_hl8( cmd.ea + 1 );
+	cmd.Op1.addr = cmd.ea + (char)get_hl8( cmd.ea + 1 );
 	cmd.size = 2;
 }
 
@@ -202,7 +223,7 @@ void b1_pcdsp16()
 	cmd.Op1.type = o_near;
 	cmd.Op1.dtyp = dt_code;
 	cmd.auxpref |= (memex_t::w + 1) << 4;
-	cmd.Op1.addr = cmd.ea + get_hl16( cmd.ea + 1 );
+	cmd.Op1.addr = cmd.ea + (short)get_hl16( cmd.ea + 1 );
 	cmd.size = 3;
 }
 
@@ -211,13 +232,25 @@ void b1_pcdsp24()
 	cmd.Op1.type = o_near;
 	cmd.Op1.dtyp = dt_code;
 	cmd.auxpref |= (memex_t::a + 1) << 4;
-	cmd.Op1.addr = cmd.ea + get_hl24( cmd.ea + 1 );
+	cmd.Op1.addr = cmd.ea + get_signed_hl24( cmd.ea + 1 );
 	cmd.size = 4;
 }
 
 void b1_imm4_rd()
 {
 	uchar data = get_hl8( cmd.ea + 1 );
+
+	cmd.size = 2;
+	cmd.Op1.type = o_imm;
+	cmd.Op1.value = data >> 4;
+	set_reg(cmd.Op2, data & 0xf);
+}
+
+void b1_imm4_rd_()
+{
+	uchar data = get_hl8( cmd.ea + 1 );
+
+	cmd.auxpref |= (memex_t::l + 1) << 4;
 
 	cmd.size = 2;
 	cmd.Op1.type = o_imm;
@@ -247,10 +280,12 @@ void b1_ld_rd_li_sz()
 	if (sz == 3)
 		return;
 
-	cmd.size = 2 + set_displ(cmd.Op2, ld, sz, data >> 4, cmd.ea + 2);
+	cmd.auxpref |= (sz + 1) << 4;
 
-	simm_t li = (simm_t)( (data >> 2) && 3);
-	cmd.size += (cmd.Op1, li, cmd.size );
+	cmd.size = 2 + set_displ(cmd.Op2, ld, (memex_t)(sz|memex_t::dont_show), data >> 4, cmd.ea + 2);
+
+	simm_t li = (simm_t)( (data >> 2) & 3);
+	cmd.size += set_imm(cmd.Op1, li, cmd.ea + cmd.size );
 }
 
 void b1_ld_rs_rd()
@@ -271,7 +306,7 @@ void b1_li_rs2_rd()
 
 	cmd.size = 2 + set_imm(cmd.Op1, li, cmd.ea + 2);
 	set_reg(cmd.Op2, data >> 4);
-	set_reg(cmd.Op3, data && 0xf );
+	set_reg(cmd.Op3, data & 0xf );
 }
 
 void b1_no_args()
@@ -299,6 +334,7 @@ void b1_rd_rd2_imm8()
 	cmd.Op1.value = get_hl8( cmd.ea + 2 );
 
 	cmd.Op2.type = o_phrase;
+	cmd.Op2.phrase_type = rx63_phrases::f_r_2_r;
 	cmd.Op2.value = data >> 4;
 	cmd.Op1.reg = data & 0xf;
 	cmd.size = 3;
@@ -320,7 +356,7 @@ void b1_sz_ld_rd_rs()
 	cmd.auxpref |= (sz + 1) << 4;
 
 	set_reg(cmd.Op1, data1 & 0xf);
-	cmd.size = 2 + (cmd.Op2, ld, sz, data1 >> 4, cmd.ea + 2);
+	cmd.size = 2 + set_displ(cmd.Op2, ld, (memex_t)(sz|memex_t::dont_show), data1 >> 4, cmd.ea + 2);
 }
 
 void b1_sz_ld_rs_rd()
@@ -332,11 +368,13 @@ void b1_sz_ld_rs_rd()
 	if (sz == 3)
 		return;
 
+	cmd.auxpref |= (sz + 1) << 4;
+
 	ld_t ld = (ld_t) ( data0 & 3 );
 	if (ld == 3)
 		return;
 
-	cmd.size = 2 + set_displ(cmd.Op1, ld, sz, data1 >> 4, cmd.ea + 2);
+	cmd.size = 2 + set_displ(cmd.Op1, ld, (memex_t)(sz|memex_t::dont_show), data1 >> 4, cmd.ea + 2);
 
 	set_reg(cmd.Op2, data1 & 0xf);
 }
@@ -350,9 +388,11 @@ void b1_sz_ld_rs_rd_u()
 	if (sz == 3)
 		return;
 
+	cmd.auxpref |= (sz + 1) << 4;
+
 	ld_t ld = (ld_t) ( data0 & 3 );
 
-	cmd.size = 2 + set_displ(cmd.Op1, ld, sz, data1 >> 4, cmd.ea + 2);
+	cmd.size = 2 + set_displ(cmd.Op1, ld, (memex_t)(sz|memex_t::dont_show), data1 >> 4, cmd.ea + 2);
 
 	set_reg(cmd.Op2, data1 & 0xf);
 }
@@ -371,12 +411,14 @@ void b1_sz_ldd_lds_rs_rd()
 	if (ldd == 3)
 		return;
 
+	cmd.auxpref |= (sz + 1) << 4;
+
 	ld_t lds = (ld_t) ( data0  & 3 );
 	if (lds == 3)
 		return;
 
-	cmd.size = 2 + set_displ(cmd.Op1, lds, sz, data1 >> 4, cmd.ea + 2);
-	cmd.size += set_displ(cmd.Op2, ldd, sz, data1 & 0xf, cmd.ea + cmd.size);
+	cmd.size = 2 + set_displ(cmd.Op1, lds, (memex_t)(sz|memex_t::dont_show), data1 >> 4, cmd.ea + 2);
+	cmd.size += set_displ(cmd.Op2, ldd, (memex_t)(sz|memex_t::dont_show), data1 & 0xf, cmd.ea + cmd.size);
 }
 
 void b1_sz_rd7_rs()
@@ -393,7 +435,7 @@ void b1_sz_rd7_rs()
 	set_reg(cmd.Op1, data1 & 7);
 
 	uchar dsp = get_scale( sz ) * ((data0 & 7) << 2) | ((data1 >> 6) & 2) | ((data1 >> 3) & 1);
-	set_displ_reg(cmd.Op2, (data1 >> 4) & 7, dsp, sz);
+	set_displ_reg(cmd.Op2, (data1 >> 4) & 7, dsp, (memex_t)(sz|memex_t::dont_show));
 	cmd.size = 2;
 }
 
@@ -407,7 +449,7 @@ void b1_sz_rd7_rs7()
 	cmd.auxpref |= (sz + 1) << 4;
 
 	uchar dsp = get_scale( sz ) * ((data0 & 7) << 2) | ((data1 >> 6) & 2) | ((data1 >> 3) & 1);
-	set_displ_reg(cmd.Op1, (data1 >> 4) & 7, dsp, sz);
+	set_displ_reg(cmd.Op1, (data1 >> 4) & 7, dsp, (memex_t)(sz|memex_t::dont_show));
 
 	set_reg(cmd.Op2, data1 & 7);
 
@@ -430,7 +472,7 @@ void b1_sz_rd()
 	cmd.Op1.value = get_hl8( cmd.ea + 2 );
 
 	uchar dsp = get_scale( sz ) * (((data1 & 0x80) >> 3) | (data1  & 0xf));
-	set_displ_reg(cmd.Op2, (data1 >> 4) & 7, dsp, sz);
+	set_displ_reg(cmd.Op2, (data1 >> 4) & 7, dsp, (memex_t)(sz|memex_t::dont_show));
 
 	cmd.size = 3;
 }
@@ -466,7 +508,7 @@ void b1_sz_rs7_rd7()
 	set_reg(cmd.Op2, data1 & 7);
 
 	uchar dsp = get_scale( sz ) * ((data0 & 7) << 2) | ((data1 >> 6) & 2) | ((data1 >> 3) & 1);
-	set_displ_reg(cmd.Op1, (data1 >> 4) & 7, dsp, sz);
+	set_displ_reg(cmd.Op1, (data1 >> 4) & 7, dsp, (memex_t)(sz|memex_t::dont_show));
 	cmd.size = 2;
 }
 
@@ -711,7 +753,7 @@ void b2_ld_rs_sz()
 
 	cmd.auxpref |= (sz + 1) << 4;
 
-	cmd.size = 2 + set_displ(cmd.Op1, ld, sz, data >> 4, cmd.ea + 2);
+	cmd.size = 2 + set_displ(cmd.Op1, ld, (memex_t)(sz|memex_t::dont_show), data >> 4, cmd.ea + 2);
 }
 
 void b2_li_rd()
@@ -749,6 +791,7 @@ void b2_rd()
 void b2_rd_li()
 {
 	uchar data = get_hl8 ( cmd.ea + 1 );
+	cmd.auxpref |= (memex_t::l + 1) << 4;
 	simm_t li = (simm_t)( (data >> 2) & 3);
 	cmd.size = 2 + set_imm(cmd.Op1, li, cmd.ea + 2);
 	set_reg(cmd.Op2, (data >> 4) & 0xf);
@@ -789,6 +832,16 @@ void b2_rs_rd()
 
 void b2_rs2_uimm8()
 {
+	cmd.Op1.type = o_imm;
+	cmd.Op1.dtyp = dt_byte;
+	cmd.Op1.value = get_hl8( cmd.ea + 2 );
+	set_reg(cmd.Op2, get_hl8( cmd.ea + 1 ) & 0xf);
+	cmd.size = 3;
+}
+
+void b2_rs2_uimm8_()
+{
+	cmd.auxpref |= (memex_t::l + 1) << 4;
 	cmd.Op1.type = o_imm;
 	cmd.Op1.dtyp = dt_byte;
 	cmd.Op1.value = get_hl8( cmd.ea + 2 );
@@ -844,7 +897,7 @@ void b2_sz_ld_rd_cd()
 	cmd.auxpref = cd;
 	cmd.auxpref |= (sz + 1) << 4;
 
-	cmd.size = 3 + set_displ(cmd.Op1, ld, sz, data1 >> 4, cmd.ea + 3);
+	cmd.size = 3 + set_displ(cmd.Op1, ld, (memex_t)(sz|memex_t::dont_show), data1 >> 4, cmd.ea + 3);
 }
 
 void b2_sz_ri_rb_rd()
@@ -1043,6 +1096,7 @@ static struct function_desc_t function_descs[] =
 	{ &b1_cd_dsp_w,		1, { 0xfe } },
 	{ &b1_dsp,			1, { 0xf8 } },
 	{ &b1_imm4_rd,		1, { 0xff } },
+	{ &b1_imm4_rd_,		1, { 0xff } },
 	{ &b1_imm5_rd,		1, { 0xfe } },
 	{ &b1_ld_rd_li_sz,	1, { 0xfc } },
 	{ &b1_ld_rs_rd,		1, { 0xfc } },
@@ -1086,6 +1140,7 @@ static struct function_desc_t function_descs[] =
 	{ &b2_rd_li,		2, { 0xff, 0x03 } },
 	{ &b2_rd_rs_rs2,	2, { 0xff, 0xf0 } }, 
 	{ &b2_rs2_uimm8,	2, { 0xff, 0xf0 } },
+	{ &b2_rs2_uimm8_,	2, { 0xff, 0xf0 } },
 	{ &b2_rs_cr,		2, { 0xff, 0xff } },
 	{ &b2_rs,			2, { 0xff, 0xf0 } },
 	{ &b2_rs_,			2, { 0xff, 0xf0 } },
@@ -1232,12 +1287,11 @@ static struct opcode_t opcodes[] = {
 
 	{ RX63_mov,		&b1_sz_rd7_rs,		{ 0x80 } },
 	{ RX63_mov,		&b1_sz_rs7_rd7,		{ 0x88 } },
-	{ RX63_mov,		&b1_imm4_rd,		{ 0x66 } },
+	{ RX63_mov,		&b1_imm4_rd_,		{ 0x66 } },
 	{ RX63_mov,		&b1_sz_rd,			{ 0x3c } },
-	{ RX63_mov,		&b2_rs2_uimm8,		{ 0x75, 0x40 } },
+	{ RX63_mov,		&b2_rs2_uimm8_,		{ 0x75, 0x40 } },
 	{ RX63_mov,		&b2_rd_li,			{ 0xfb, 0x02 } },
 	{ RX63_mov,		&b1_sz_rs_rd,		{ 0xcf } },
-	// bottom not checked
 	{ RX63_mov,		&b1_ld_rd_li_sz,	{ 0xf8 } },
 	{ RX63_mov,		&b1_sz_ld_rs_rd,	{ 0xcc } },
 	{ RX63_mov,		&b2_sz_ri_rb_rd,	{ 0xfe, 0x40 } },
@@ -1288,8 +1342,9 @@ static struct opcode_t opcodes[] = {
 
 	{ RX63_push,	&b2_sz_rs,			{ 0x7e, 0x80 } },
 	{ RX63_push,	&b2_ld_rs_sz,		{ 0xf4, 0x08 } },
-	{ RX63_pushc,	&b2_cr_,			{ 0x7e, 0x08 } },
-	{ RX63_pushm,	&b1_rd_rd2,			{ 0x6f } },
+	{ RX63_pushc,	&b2_cr_,			{ 0x7e, 0xc0 } },
+	{ RX63_pushm,	&b1_rd_rd2,			{ 0x6e } },
+
 	{ RX63_racw,	&b3_imm1,			{ 0xfd, 0x18, 0x00 } },
 	{ RX63_revl,	&b2_rs_rd,			{ 0xfd, 0x67 } },
 	{ RX63_revw,	&b2_rs_rd,			{ 0xfd, 0x65 } },
@@ -1301,6 +1356,7 @@ static struct opcode_t opcodes[] = {
 	{ RX63_rotr,	&b2_imm5_rd,		{ 0xfd, 0x6c } },
 	{ RX63_rotr,	&b2_rs_rd,			{ 0xfd, 0x64 } },
 	{ RX63_round,	&b2_ld_rs_rd_l,		{ 0xfc, 0x98 } },
+
 	{ RX63_rte,		&b2_no_args,		{ 0x7f, 0x95 } },
 	{ RX63_rtfi,	&b2_no_args,		{ 0x7f, 0x94 } },
 	{ RX63_rts,		&b1_no_args,		{ 0x02 } },
@@ -1368,7 +1424,7 @@ parse_result_t parse_opcode(int stage, uchar opcode, void (*function))
 {
 	bool function_found = false;
 	int i;
-	for(i=0; i < qnumber( function_descs ); i++)
+	for(i = 0; i < qnumber( function_descs ); i++)
 	{
 		if ( function_descs[i].function == function)
 		{
@@ -1404,7 +1460,6 @@ int idaapi ana( void )
 				continue;
 	
 			parse_result_t res = parse_opcode(stage, opcodes[i].opcodes[stage], opcodes[i].function);
-			//msg("stage:%d opcode:%a res:%d\n", stage, opcodes[i].opcodes[stage], res);
 
 			if (res == parse_result_t::match)
 			{

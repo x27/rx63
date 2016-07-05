@@ -29,8 +29,7 @@ static int idaapi notify(processor_t::idp_notify msgid, ...)
 	{
 		case processor_t::init:
 			helper.create("$ RX63");
-			// little endian
-			inf.mf = 0;
+			inf.mf = 1;
 			break;
 
 		case processor_t::newfile:
@@ -193,8 +192,8 @@ processor_t LPH =
 	NULL,                 // int (*create_func_frame)(func_t *pfn);
 	NULL,                 // int (*get_frame_retsize(func_t *pfn)
 	NULL,                 // void (*gen_stkvar_def)(char *buf,const member_t *mptr,int32 v);
-	NULL,					// Generate text representation of an item in a special segment
-	NULL,					// Icode of return instruction. It is ok to give any of possible return instructions
+	gen_spcdef,					// Generate text representation of an item in a special segment
+	RX63_rte,				// Icode of return instruction. It is ok to give any of possible return instructions
 	NULL,					// const char *(*set_idp_options)(const char *keyword,int value_type,const void *value);
 	NULL,                 // int (*is_align_insn)(ea_t ea);
 	NULL,                 // mvm_t *mvm;
