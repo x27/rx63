@@ -70,6 +70,23 @@ inline ea_t real_address( ea_t ea )
 	return ( ea >> 2 << 2 ) + 3 - ( ea & 3 );
 }
 
+bool is_need_add_empty_line()
+{
+	const int empty_line_ops[] = { RX63_smovf, RX63_jsr, RX63_b, RX63_bsr  };
+
+	if ( get_first_cref_from (cmd.ea + cmd.size ) != BADADDR)
+		return false;
+
+	for(int i=0; i< qnumber( empty_line_ops ); i++)
+	{
+		if( empty_line_ops[i] == cmd.itype )
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 void idaapi out(void)
 {
 	char buf[MAXSTR];
@@ -122,6 +139,9 @@ void idaapi out(void)
 	term_output_buffer();
 	gl_comm = 1;
 	MakeLine(buf);
+
+	//if ( is_need_add_empty_line() )
+	//	MakeLine("");
 }
 
 bool idaapi outop(op_t &x)
@@ -248,3 +268,4 @@ bool idaapi outop(op_t &x)
 	}
 	return 1;
 }
+

@@ -1,11 +1,12 @@
 #include "rx63.hpp"
 #include <diskio.hpp>
+#include <ieee.h>
 
 netnode helper;
 
 static const char *const reg_names[] =
 {
-	"r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15",
+	"sp"/*"r0"*/, "r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15",
 	"isp", "usp", "intb", "pc", "psw", "bpc", "bpsw", "fintv", "fpsw", 
 	"cs", "ds",
 };
@@ -178,8 +179,8 @@ processor_t LPH =
 	NULL,					// int  (*is_far_jump)(int icode);
 	NULL,			        // Translation function for offsets
 	0,						// int tbyte_size;  -- doesn't exist
-	NULL,					// int (*realcvt)(void *m, ushort *e, ushort swt);
-	{ 0, 0, 0, 0 },       // char real_width[4];
+	ieee_realcvt,			// int (*realcvt)(void *m, ushort *e, ushort swt);
+	{ 0, 7, 15, 0 },       // char real_width[4];
 						  // number of symbols after decimal point
 						  // 2byte float (0-does not exist)
 						  // normal float

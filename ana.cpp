@@ -136,7 +136,7 @@ int set_displ(op_t &op, ld_t ld, memex_t memex, uval_t reg, ea_t ea)
 	else if (ld == ld_t::dsp16)
 	{
 		uval_t value = get_scale(memex) * get_hl16( ea );
-		msg("value %a %a\n", ea, value);
+		//msg("value %a %a\n", ea, value);
 		set_displ_reg(op, reg, value, memex);
 		res = 2;
 	}
@@ -619,9 +619,11 @@ void b2_cr_rd()
 	if ((creg > 3 && creg < 8) || creg > 12)
 		return;
 
-	cmd.size = 2;
+	cmd.size = 3;
 	cmd.Op1.type = o_creg;
 	cmd.Op1.value = creg;
+
+	set_reg(cmd.Op2, data & 0xf);
 }
 
 void b2_imm3_ld_rd_cd()

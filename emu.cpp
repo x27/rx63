@@ -14,28 +14,25 @@ static void handle_operand(const op_t &op, bool loading)
   {
     // Address
     case o_near:
-      // branch label - create code reference (call or jump
-      // according to the instruction)
       {
         ea_t ea = toEA(cmd.cs, op.addr);
-        cref_t ftype = fl_JN;
-        if ( InstrIsSet(cmd.itype, CF_CALL) )
+		int iscall = InstrIsSet(cmd.itype, CF_CALL);
+        ua_add_cref(op.offb, ea, iscall ? fl_CN : fl_JN);
+
+        if ( flow && iscall )
         {
           if ( !func_does_return(ea) )
             flow = false;
-          ftype = fl_CN;
         }
-        ua_add_cref(op.offb, ea, ftype);
-      }
+     }
       break;
 
     // Immediate
     case o_imm:
-    //  QASSERT(10135, loading);
 		handle_imm();
-    //  // if the value was converted to an offset, then create a data xref:
-      if ( op_adds_xrefs(uFlag, op.n) )
-        ua_add_off_drefs2(op, dr_O, OOFW_IMM|OOF_SIGNED);
+
+		if ( op_adds_xrefs(uFlag, op.n) )
+			ua_add_off_drefs2(op, dr_O, OOFW_IMM|OOF_SIGNED);
 
     //  // create a comment if this immediate is represented in the .cfg file
     //  {
@@ -65,21 +62,6 @@ static void handle_operand(const op_t &op, bool loading)
       break;
 
     case o_phrase:
-    //  /* create stack variables if required */
-    //  if ( op.specflag1 == fRI && may_create_stkvars() && !isDefArg(uFlag, op.n) )
-    //  {
-    //    func_t *pfn = get_func(cmd.ea);
-    //    if ( pfn != NULL
-    //      && (op.reg == rFP || op.reg == rSP)
-    //      && (pfn->flags & FUNC_FRAME) != 0 )
-    //    {
-    //      if ( ua_stkvar2(op, 0, STKVAR_VALID_SIZE) )
-    //        op_stkvar(cmd.ea, op.n);
-    //    }
-    //  }
-      break;
-
-    // Phrase - register - void : do nothing
     case o_reg:
     case o_void:
 	case o_flag:
@@ -108,6 +90,21 @@ int idaapi emu(void)
 	if ( feature & CF_CHG3)    handle_operand(cmd.Op3, 0 );
 
 	if ( flow)    ua_add_cref(0, cmd.ea + cmd.size, fl_F );
+
+	if (cmd.itype == RX63_jsr)
+	{
+		uchar reg = cmd.Op1.reg;
+		if (decode_prev_insn( cmd.ea ) != BADADDR)
+		{
+			if (cmd.itype == RX63_mov && 
+				cmd.Op1.type == o_imm &&
+				cmd.Op2.type == o_reg &&
+				cmd.Op2.reg == reg)
+			{
+				ua_add_cref(0, cmd.Op1.value, fl_CF);
+			}
+		}
+	}
 
 	return 1;
 }
