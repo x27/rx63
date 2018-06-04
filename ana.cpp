@@ -1,6 +1,6 @@
 #include "rx63.hpp"
 
-#define USE_REAL_ADDRESS
+//#define USE_REAL_ADDRESS
 
 enum simm_t 
 {
@@ -14,7 +14,7 @@ void set_reg(op_t &op, uint16 reg)
 {
 	op.type = o_reg;
 	op.reg = reg;
-	op.dtyp = dt_word;
+	op.dtype = dt_word;
 }
 
 void set_displ_reg(op_t &op, uint16 reg, uval_t value, memex_t memex) 
@@ -22,8 +22,8 @@ void set_displ_reg(op_t &op, uint16 reg, uval_t value, memex_t memex)
 	op.type = o_displ;
 	op.value = value;
 	op.reg = reg;
-	op.dtyp = dt_word;
-	op.memex = memex;
+	op.dtype = dt_word;
+	op.memex = (char)memex;
 }
 
 inline ea_t real_address( ea_t ea )
@@ -37,7 +37,7 @@ inline ea_t real_address( ea_t ea )
 
 uchar get_hl8( ea_t ea)
 {
-	return (uchar) get_full_byte (real_address( ea ) );
+	return (uchar) get_wide_byte(real_address( ea ) );
 }
 
 uint get_hl32( ea_t ea )
@@ -87,25 +87,25 @@ int set_imm(op_t &op, simm_t imm, ea_t ea)
 	op.type = o_imm;
 	switch(imm)
 	{
-		case simm_t::imm32:
+		case imm32:
 			size = 4;
 			op.value = get_hl32( ea );
-			op.dtyp = dt_dword;
+			op.dtype = dt_dword;
 			break;
-		case simm_t::simm8:
+		case simm8:
 			size = 1;
 			op.value = get_hl8( ea );
-			op.dtyp = dt_byte;
+			op.dtype = dt_byte;
 			break;
-		case simm_t::simm16:
+		case simm16:
 			size = 2;
 			op.value = get_hl16( ea );
-			op.dtyp = dt_word;
+			op.dtype = dt_word;
 			break;
-		case simm_t::simm24:
+		case simm24:
 			size = 3;
-			op.value = get_hl24( ea );
-			op.dtyp = dt_3byte;
+			op.value = get_signed_hl24( ea );
+			op.dtype = dt_dword;
 			break;
 	}
 	return size;
@@ -113,11 +113,11 @@ int set_imm(op_t &op, simm_t imm, ea_t ea)
 
 int get_scale(memex_t mem)
 {
-	memex_t m = (memex_t)(mem & 0xf);
+	memex_t m = (memex_t)((int)mem & 0xf);
 	int scale = 1;
-	if ( memex_t::w == m || memex_t::uw == m )
+	if ( memex_tw == m || memex_tuw == m )
 		scale = 2;
-	else if ( memex_t::l == m )
+	else if ( memex_tl == m )
 		scale = 4;
 	return scale;
 }
@@ -125,15 +125,15 @@ int get_scale(memex_t mem)
 int set_displ(op_t &op, ld_t ld, memex_t memex, uval_t reg, ea_t ea)
 {
 	int res = 0;
-	op.ld = ld;
+	op.ld = (char)ld;
 
-	if (ld == ld_t::dsp8)
+	if (ld == ld_tdsp8)
 	{
 		uval_t value = get_scale(memex) * get_hl8( ea );
 		set_displ_reg(op, reg, value, memex);
 		res = 1;
 	}
-	else if (ld == ld_t::dsp16)
+	else if (ld == ld_tdsp16)
 	{
 		uval_t value = get_scale(memex) * get_hl16( ea );
 		//msg("value %a %a\n", ea, value);
@@ -151,199 +151,199 @@ int set_displ(op_t &op, ld_t ld, memex_t memex, uval_t reg, ea_t ea)
 /* ---------	instruction providers -------------------------- */
 /* -------------------------------------------------------------*/
 
-void b1_cd_dsp_s()
+void b1_cd_dsp_s(insn_t *insn)
 {
-	uchar data = get_hl8( cmd.ea );
-	cmd.auxpref = (data & 0x08) == 0 ? condition_t::eq : condition_t::ne;
-	cmd.auxpref |= (memex_t::s + 1) << 4;
-	cmd.Op1.type = o_near;
-	cmd.Op1.dtyp = dt_code;
+	uchar data = get_hl8( insn->ea );
+	insn->auxpref = (data & 0x08) == 0 ? condition_teq : condition_tne;
+	insn->auxpref |= (memex_ts + 1) << 4;
+	insn->Op1.type = o_near;
+	insn->Op1.dtype = dt_code;
 
 	uint disp = data & 7;
 	if (disp < 3)
 		disp += 8;
-	cmd.Op1.addr = cmd.ea + disp;
-	cmd.size = 1;
+	insn->Op1.addr = insn->ea + disp;
+	insn->size = 1;
 }
 
-void b1_cd_dsp_b()
+void b1_cd_dsp_b(insn_t *insn)
 {
-	uchar data = get_hl8( cmd.ea );
+	uchar data = get_hl8( insn->ea );
 
 	uchar cd = data & 0xf;
 
 	if (cd == 0xf || cd == 0xe)
 		return;
 
-	cmd.auxpref = cd;
-	cmd.auxpref |= (memex_t::b + 1) << 4;
-	cmd.Op1.type = o_near;
-	cmd.Op1.dtyp = dt_code;
+	insn->auxpref = cd;
+	insn->auxpref |= (memex_tb + 1) << 4;
+	insn->Op1.type = o_near;
+	insn->Op1.dtype = dt_code;
 
-	cmd.Op1.addr = cmd.ea + (char)get_hl8( cmd.ea + 1);
-	cmd.size = 2;
+	insn->Op1.addr = insn->ea + (char)get_hl8( insn->ea + 1);
+	insn->size = 2;
 }
 
-void b1_cd_dsp_w()
+void b1_cd_dsp_w(insn_t *insn)
 {
-	uchar data = get_hl8( cmd.ea );
-	cmd.auxpref = data & 1 ? condition_t::ne : condition_t::eq;
-	cmd.auxpref |= (memex_t::w + 1) << 4;
-	cmd.Op1.type = o_near;
-	cmd.Op1.dtyp = dt_code;
+	uchar data = get_hl8( insn->ea );
+	insn->auxpref = data & 1 ? condition_tne : condition_teq;
+	insn->auxpref |= (memex_tw + 1) << 4;
+	insn->Op1.type = o_near;
+	insn->Op1.dtype = dt_code;
 
-	cmd.Op1.addr = cmd.ea + (short)get_hl16( cmd.ea + 1);
-	cmd.size = 3;
+	insn->Op1.addr = insn->ea + (short)get_hl16( insn->ea + 1);
+	insn->size = 3;
 }
 
-void b1_dsp()
+void b1_dsp(insn_t *insn)
 {
-	uint disp = get_hl8( cmd.ea ) & 7;
+	uint disp = get_hl8( insn->ea ) & 7;
 	if (disp < 3)
 		disp += 8;
 
-	cmd.Op1.type = o_near;
-	cmd.Op1.dtyp = dt_code;
-	cmd.auxpref |= (memex_t::s + 1) << 4;
-	cmd.Op1.addr = cmd.ea + disp;
-	cmd.size = 1;
+	insn->Op1.type = o_near;
+	insn->Op1.dtype = dt_code;
+	insn->auxpref |= (memex_ts + 1) << 4;
+	insn->Op1.addr = insn->ea + disp;
+	insn->size = 1;
 }
 
-void b1_pcdsp8()
+void b1_pcdsp8(insn_t *insn)
 {
-	cmd.Op1.type = o_near;
-	cmd.Op1.dtyp = dt_code;
-	cmd.auxpref |= (memex_t::b + 1) << 4;
-	cmd.Op1.addr = cmd.ea + (char)get_hl8( cmd.ea + 1 );
-	cmd.size = 2;
+	insn->Op1.type = o_near;
+	insn->Op1.dtype = dt_code;
+	insn->auxpref |= (memex_tb + 1) << 4;
+	insn->Op1.addr = insn->ea + (char)get_hl8( insn->ea + 1 );
+	insn->size = 2;
 }
 
-void b1_pcdsp16()
+void b1_pcdsp16(insn_t *insn)
 {
-	cmd.Op1.type = o_near;
-	cmd.Op1.dtyp = dt_code;
-	cmd.auxpref |= (memex_t::w + 1) << 4;
-	cmd.Op1.addr = cmd.ea + (short)get_hl16( cmd.ea + 1 );
-	cmd.size = 3;
+	insn->Op1.type = o_near;
+	insn->Op1.dtype = dt_code;
+	insn->auxpref |= (memex_tw + 1) << 4;
+	insn->Op1.addr = insn->ea + (short)get_hl16( insn->ea + 1 );
+	insn->size = 3;
 }
 
-void b1_pcdsp24()
+void b1_pcdsp24(insn_t *insn)
 {
-	cmd.Op1.type = o_near;
-	cmd.Op1.dtyp = dt_code;
-	cmd.auxpref |= (memex_t::a + 1) << 4;
-	cmd.Op1.addr = cmd.ea + get_signed_hl24( cmd.ea + 1 );
-	cmd.size = 4;
+	insn->Op1.type = o_near;
+	insn->Op1.dtype = dt_code;
+	insn->auxpref |= (memex_ta + 1) << 4;
+	insn->Op1.addr = insn->ea + get_signed_hl24( insn->ea + 1 );
+	insn->size = 4;
 }
 
-void b1_imm4_rd()
+void b1_imm4_rd(insn_t *insn)
 {
-	uchar data = get_hl8( cmd.ea + 1 );
+	uchar data = get_hl8( insn->ea + 1 );
 
-	cmd.size = 2;
-	cmd.Op1.type = o_imm;
-	cmd.Op1.value = data >> 4;
-	set_reg(cmd.Op2, data & 0xf);
+	insn->size = 2;
+	insn->Op1.type = o_imm;
+	insn->Op1.value = data >> 4;
+	set_reg(insn->Op2, data & 0xf);
 }
 
-void b1_imm4_rd_()
+void b1_imm4_rd_(insn_t *insn)
 {
-	uchar data = get_hl8( cmd.ea + 1 );
+	uchar data = get_hl8( insn->ea + 1 );
 
-	cmd.auxpref |= (memex_t::l + 1) << 4;
+	insn->auxpref |= (memex_tl + 1) << 4;
 
-	cmd.size = 2;
-	cmd.Op1.type = o_imm;
-	cmd.Op1.value = data >> 4;
-	set_reg(cmd.Op2, data & 0xf);
+	insn->size = 2;
+	insn->Op1.type = o_imm;
+	insn->Op1.value = data >> 4;
+	set_reg(insn->Op2, data & 0xf);
 }
 
-void b1_imm5_rd()
+void b1_imm5_rd(insn_t *insn)
 {
-	ushort data0 = (get_hl8( cmd.ea ) & 1) << 4;
-	ushort data1 = get_hl8( cmd.ea + 1 );
+	ushort data0 = (get_hl8( insn->ea ) & 1) << 4;
+	ushort data1 = get_hl8( insn->ea + 1 );
 
-	cmd.size = 2;
-	cmd.Op1.type = o_imm;
-	cmd.Op1.value = (data0 | (data1 >> 4)) & 0x1f;
-	set_reg(cmd.Op2, data1 & 0xf);
+	insn->size = 2;
+	insn->Op1.type = o_imm;
+	insn->Op1.value = (data0 | (data1 >> 4)) & 0x1f;
+	set_reg(insn->Op2, data1 & 0xf);
 }
 
-void b1_ld_rd_li_sz()
+void b1_ld_rd_li_sz(insn_t *insn)
 {
-	ld_t ld = (ld_t)(get_hl8( cmd.ea ) & 3);
+	ld_t ld = (ld_t)(get_hl8( insn->ea ) & 3);
 	if (ld == 3)
 		return;
 
-	uchar data = get_hl8( cmd.ea + 1);
+	uchar data = get_hl8( insn->ea + 1);
 	memex_t sz = (memex_t) (data & 3);
 	if (sz == 3)
 		return;
 
-	cmd.auxpref |= (sz + 1) << 4;
+	insn->auxpref |= (sz + 1) << 4;
 
-	cmd.size = 2 + set_displ(cmd.Op2, ld, (memex_t)(sz|memex_t::dont_show), data >> 4, cmd.ea + 2);
+	insn->size = 2 + set_displ(insn->Op2, ld, (memex_t)(sz|memex_tdont_show), data >> 4, insn->ea + 2);
 
 	simm_t li = (simm_t)( (data >> 2) & 3);
-	cmd.size += set_imm(cmd.Op1, li, cmd.ea + cmd.size );
+	insn->size += set_imm(insn->Op1, li, insn->ea + insn->size );
 }
 
-void b1_ld_rs_rd()
+void b1_ld_rs_rd(insn_t *insn)
 {
-	uchar data0 = get_hl8( cmd.ea );
-	uchar data1 = get_hl8( cmd.ea + 1 );
+	uchar data0 = get_hl8( insn->ea );
+	uchar data1 = get_hl8( insn->ea + 1 );
 
 	ld_t ld = (ld_t)(data0 & 3);
 
-	cmd.size = 2 + set_displ(cmd.Op1, ld, memex_t::ub, data1 >> 4, cmd.ea + 2);
-	set_reg(cmd.Op2, data1 & 0xf);
+	insn->size = 2 + set_displ(insn->Op1, ld, memex_tub, data1 >> 4, insn->ea + 2);
+	set_reg(insn->Op2, data1 & 0xf);
 }
 
-void b1_li_rs2_rd()
+void b1_li_rs2_rd(insn_t *insn)
 {
-	simm_t li = (simm_t)(get_hl8( cmd.ea ) & 3);
-	uchar data = get_hl8 ( cmd.ea + 1 );
+	simm_t li = (simm_t)(get_hl8( insn->ea ) & 3);
+	uchar data = get_hl8 ( insn->ea + 1 );
 
-	cmd.size = 2 + set_imm(cmd.Op1, li, cmd.ea + 2);
-	set_reg(cmd.Op2, data >> 4);
-	set_reg(cmd.Op3, data & 0xf );
+	insn->size = 2 + set_imm(insn->Op1, li, insn->ea + 2);
+	set_reg(insn->Op2, data >> 4);
+	set_reg(insn->Op3, data & 0xf );
 }
 
-void b1_no_args()
+void b1_no_args(insn_t *insn)
 {
-	cmd.size = 1;
+	insn->size = 1;
 }
 
-void b1_rd_rd2()
+void b1_rd_rd2(insn_t *insn)
 {
-	uchar data = get_hl8( cmd.ea + 1 );
+	uchar data = get_hl8( insn->ea + 1 );
 
-	cmd.Op1.type = o_phrase;
-	cmd.Op1.phrase_type = rx63_phrases::f_r_2_r;
-	cmd.Op1.value = data >> 4;
-	cmd.Op1.reg = data & 0xf;
-	cmd.size = 2;
+	insn->Op1.type = o_phrase;
+	insn->Op1.phrase_type = rx63_phrasesf_r_2_r;
+	insn->Op1.value = data >> 4;
+	insn->Op1.reg = data & 0xf;
+	insn->size = 2;
 }
 
-void b1_rd_rd2_imm8()
+void b1_rd_rd2_imm8(insn_t *insn)
 {
-	uchar data = get_hl8( cmd.ea + 1 );
+	uchar data = get_hl8( insn->ea + 1 );
 
-	cmd.Op1.type = o_imm;
-	cmd.Op1.dtyp = dt_byte;
-	cmd.Op1.value = get_hl8( cmd.ea + 2 );
+	insn->Op1.type = o_imm;
+	insn->Op1.dtype = dt_byte;
+	insn->Op1.value = get_hl8( insn->ea + 2 );
 
-	cmd.Op2.type = o_phrase;
-	cmd.Op2.phrase_type = rx63_phrases::f_r_2_r;
-	cmd.Op2.value = data >> 4;
-	cmd.Op1.reg = data & 0xf;
-	cmd.size = 3;
+	insn->Op2.type = o_phrase;
+	insn->Op2.phrase_type = rx63_phrasesf_r_2_r;
+	insn->Op2.value = data >> 4;
+	insn->Op1.reg = data & 0xf;
+	insn->size = 3;
 }
 
-void b1_sz_ld_rd_rs()
+void b1_sz_ld_rd_rs(insn_t *insn)
 {
-	uchar data0 = get_hl8( cmd.ea );
-	uchar data1 = get_hl8( cmd.ea + 1 );
+	uchar data0 = get_hl8( insn->ea );
+	uchar data1 = get_hl8( insn->ea + 1 );
 
 	memex_t sz = (memex_t)(( data0 >> 4 ) & 3);
 	if (sz == 3)
@@ -353,55 +353,55 @@ void b1_sz_ld_rd_rs()
 	if (ld == 3)
 		return;
 
-	cmd.auxpref |= (sz + 1) << 4;
+	insn->auxpref |= (sz + 1) << 4;
 
-	set_reg(cmd.Op1, data1 & 0xf);
-	cmd.size = 2 + set_displ(cmd.Op2, ld, (memex_t)(sz|memex_t::dont_show), data1 >> 4, cmd.ea + 2);
+	set_reg(insn->Op1, data1 & 0xf);
+	insn->size = 2 + set_displ(insn->Op2, ld, (memex_t)(sz|memex_tdont_show), data1 >> 4, insn->ea + 2);
 }
 
-void b1_sz_ld_rs_rd()
+void b1_sz_ld_rs_rd(insn_t *insn)
 {
-	uchar data0 = get_hl8( cmd.ea );
-	uchar data1 = get_hl8( cmd.ea + 1 );
+	uchar data0 = get_hl8( insn->ea );
+	uchar data1 = get_hl8( insn->ea + 1 );
 
 	memex_t sz = (memex_t)(( data0 >> 4 ) & 3);
 	if (sz == 3)
 		return;
 
-	cmd.auxpref |= (sz + 1) << 4;
+	insn->auxpref |= (sz + 1) << 4;
 
 	ld_t ld = (ld_t) ( data0 & 3 );
 	if (ld == 3)
 		return;
 
-	cmd.size = 2 + set_displ(cmd.Op1, ld, (memex_t)(sz|memex_t::dont_show), data1 >> 4, cmd.ea + 2);
+	insn->size = 2 + set_displ(insn->Op1, ld, (memex_t)(sz|memex_tdont_show), data1 >> 4, insn->ea + 2);
 
-	set_reg(cmd.Op2, data1 & 0xf);
+	set_reg(insn->Op2, data1 & 0xf);
 }
 
-void b1_sz_ld_rs_rd_u()
+void b1_sz_ld_rs_rd_u(insn_t *insn)
 {
-	uchar data0 = get_hl8( cmd.ea );
-	uchar data1 = get_hl8( cmd.ea + 1 );
+	uchar data0 = get_hl8( insn->ea );
+	uchar data1 = get_hl8( insn->ea + 1 );
 
 	memex_t sz = (memex_t)(( data0 >> 2 ) & 1);
 	if (sz == 3)
 		return;
 
-	cmd.auxpref |= (sz + 1) << 4;
+	insn->auxpref |= (sz + 1) << 4;
 
 	ld_t ld = (ld_t) ( data0 & 3 );
 
-	cmd.size = 2 + set_displ(cmd.Op1, ld, (memex_t)(sz|memex_t::dont_show), data1 >> 4, cmd.ea + 2);
+	insn->size = 2 + set_displ(insn->Op1, ld, (memex_t)(sz|memex_tdont_show), data1 >> 4, insn->ea + 2);
 
-	set_reg(cmd.Op2, data1 & 0xf);
+	set_reg(insn->Op2, data1 & 0xf);
 }
 
 
-void b1_sz_ldd_lds_rs_rd()
+void b1_sz_ldd_lds_rs_rd(insn_t *insn)
 {
-	uchar data0 = get_hl8( cmd.ea );
-	uchar data1 = get_hl8( cmd.ea + 1 );
+	uchar data0 = get_hl8( insn->ea );
+	uchar data1 = get_hl8( insn->ea + 1 );
 
 	memex_t sz = (memex_t)(( data0 >> 4 ) & 3);
 	if (sz == 3)
@@ -411,225 +411,225 @@ void b1_sz_ldd_lds_rs_rd()
 	if (ldd == 3)
 		return;
 
-	cmd.auxpref |= (sz + 1) << 4;
+	insn->auxpref |= (sz + 1) << 4;
 
 	ld_t lds = (ld_t) ( data0  & 3 );
 	if (lds == 3)
 		return;
 
-	cmd.size = 2 + set_displ(cmd.Op1, lds, (memex_t)(sz|memex_t::dont_show), data1 >> 4, cmd.ea + 2);
-	cmd.size += set_displ(cmd.Op2, ldd, (memex_t)(sz|memex_t::dont_show), data1 & 0xf, cmd.ea + cmd.size);
+	insn->size = 2 + set_displ(insn->Op1, lds, (memex_t)(sz|memex_tdont_show), data1 >> 4, insn->ea + 2);
+	insn->size += set_displ(insn->Op2, ldd, (memex_t)(sz|memex_tdont_show), data1 & 0xf, insn->ea + insn->size);
 }
 
-void b1_sz_rd7_rs()
+void b1_sz_rd7_rs(insn_t *insn)
 {
-	uchar data0 = get_hl8( cmd.ea );
-	uchar data1 = get_hl8( cmd.ea + 1 );
+	uchar data0 = get_hl8( insn->ea );
+	uchar data1 = get_hl8( insn->ea + 1 );
 
 	memex_t sz = (memex_t)(( data0 >> 4 ) & 3);
 	if (sz == 3)
 		return;
 
-	cmd.auxpref |= (sz + 1) << 4;
+	insn->auxpref |= (sz + 1) << 4;
 
-	set_reg(cmd.Op1, data1 & 7);
+	set_reg(insn->Op1, data1 & 7);
 
 	uchar dsp = get_scale( sz ) * ((data0 & 7) << 2) | ((data1 >> 6) & 2) | ((data1 >> 3) & 1);
-	set_displ_reg(cmd.Op2, (data1 >> 4) & 7, dsp, (memex_t)(sz|memex_t::dont_show));
-	cmd.size = 2;
+	set_displ_reg(insn->Op2, (data1 >> 4) & 7, dsp, (memex_t)(sz|memex_tdont_show));
+	insn->size = 2;
 }
 
-void b1_sz_rd7_rs7()
+void b1_sz_rd7_rs7(insn_t *insn)
 {
-	uchar data0 = get_hl8( cmd.ea );
-	uchar data1 = get_hl8( cmd.ea + 1 );
+	uchar data0 = get_hl8( insn->ea );
+	uchar data1 = get_hl8( insn->ea + 1 );
 
 	memex_t sz = (memex_t)(( data0 >> 3 ) & 1);
 
-	cmd.auxpref |= (sz + 1) << 4;
+	insn->auxpref |= (sz + 1) << 4;
 
 	uchar dsp = get_scale( sz ) * ((data0 & 7) << 2) | ((data1 >> 6) & 2) | ((data1 >> 3) & 1);
-	set_displ_reg(cmd.Op1, (data1 >> 4) & 7, dsp, (memex_t)(sz|memex_t::dont_show));
+	set_displ_reg(insn->Op1, (data1 >> 4) & 7, dsp, (memex_t)(sz|memex_tdont_show));
 
-	set_reg(cmd.Op2, data1 & 7);
+	set_reg(insn->Op2, data1 & 7);
 
-	cmd.size = 2;
+	insn->size = 2;
 }
 
 
-void b1_sz_rd()
+void b1_sz_rd(insn_t *insn)
 {
-	uchar data0 = get_hl8( cmd.ea );
-	uchar data1 = get_hl8( cmd.ea + 1 );
+	uchar data0 = get_hl8( insn->ea );
+	uchar data1 = get_hl8( insn->ea + 1 );
 
 	memex_t sz = (memex_t)( data0 & 3);
 	if (sz == 3)
 		return;
 
-	cmd.auxpref |= (sz + 1) << 4;
+	insn->auxpref |= (sz + 1) << 4;
 
-	cmd.Op1.type = o_imm;
-	cmd.Op1.value = get_hl8( cmd.ea + 2 );
+	insn->Op1.type = o_imm;
+	insn->Op1.value = get_hl8( insn->ea + 2 );
 
 	uchar dsp = get_scale( sz ) * (((data1 & 0x80) >> 3) | (data1  & 0xf));
-	set_displ_reg(cmd.Op2, (data1 >> 4) & 7, dsp, (memex_t)(sz|memex_t::dont_show));
+	set_displ_reg(insn->Op2, (data1 >> 4) & 7, dsp, (memex_t)(sz|memex_tdont_show));
 
-	cmd.size = 3;
+	insn->size = 3;
 }
 
-void b1_sz_rs_rd()
+void b1_sz_rs_rd(insn_t *insn)
 {
-	uchar data0 = get_hl8( cmd.ea );
-	uchar data1 = get_hl8( cmd.ea + 1 );
+	uchar data0 = get_hl8( insn->ea );
+	uchar data1 = get_hl8( insn->ea + 1 );
 
 	memex_t sz = (memex_t)(( data0 >> 4 ) & 3);
 	if (sz == 3)
 		return;
 
-	cmd.auxpref |= (sz + 1) << 4;
+	insn->auxpref |= (sz + 1) << 4;
 
-	set_reg(cmd.Op1, data1 >> 4);
-	set_reg(cmd.Op2, data1 & 0xf);
+	set_reg(insn->Op1, data1 >> 4);
+	set_reg(insn->Op2, data1 & 0xf);
 
-	cmd.size = 2;
+	insn->size = 2;
 }
 
-void b1_sz_rs7_rd7()
+void b1_sz_rs7_rd7(insn_t *insn)
 {
-	uchar data0 = get_hl8( cmd.ea );
-	uchar data1 = get_hl8( cmd.ea + 1 );
+	uchar data0 = get_hl8( insn->ea );
+	uchar data1 = get_hl8( insn->ea + 1 );
 
 	memex_t sz = (memex_t)(( data0 >> 4 ) & 3);
 	if (sz == 3)
 		return;
 
-	cmd.auxpref |= (sz + 1) << 4;
+	insn->auxpref |= (sz + 1) << 4;
 
-	set_reg(cmd.Op2, data1 & 7);
+	set_reg(insn->Op2, data1 & 7);
 
 	uchar dsp = get_scale( sz ) * ((data0 & 7) << 2) | ((data1 >> 6) & 2) | ((data1 >> 3) & 1);
-	set_displ_reg(cmd.Op1, (data1 >> 4) & 7, dsp, (memex_t)(sz|memex_t::dont_show));
-	cmd.size = 2;
+	set_displ_reg(insn->Op1, (data1 >> 4) & 7, dsp, (memex_t)(sz|memex_tdont_show));
+	insn->size = 2;
 }
 
-void b1_uimm8()
+void b1_uimm8(insn_t *insn)
 {
-	cmd.Op1.type = o_imm;
-	cmd.Op1.dtyp = dt_byte;
-	cmd.Op1.value = get_hl8( cmd.ea + 1 );
-	cmd.size = 2;
+	insn->Op1.type = o_imm;
+	insn->Op1.dtype = dt_byte;
+	insn->Op1.value = get_hl8( insn->ea + 1 );
+	insn->size = 2;
 }
 
-void b2_ad_sz_rds()
+void b2_ad_sz_rds(insn_t *insn)
 {
-	uchar data0 = get_hl8( cmd.ea + 1 );
-	uchar data1 = get_hl8( cmd.ea + 2 );
+	uchar data0 = get_hl8( insn->ea + 1 );
+	uchar data1 = get_hl8( insn->ea + 2 );
 
 	memex_t sz = (memex_t)( data0 & 3);
 	if (sz == 3)
 		return;
 
-	cmd.auxpref |= (sz + 1) << 4;
+	insn->auxpref |= (sz + 1) << 4;
 
 	uchar ad = (data0 >> 2) & 3;
 
 	if (ad < 2)
 	{
-		set_reg(cmd.Op1, data1 & 0xf);
+		set_reg(insn->Op1, data1 & 0xf);
 	
-		cmd.Op2.type = o_phrase;
-		cmd.Op2.phrase_type = ad == 0 ? rx63_phrases::f_r_plus : rx63_phrases::f_r_minus;
-		cmd.Op2.reg = data1 >> 4;
+		insn->Op2.type = o_phrase;
+		insn->Op2.phrase_type = ad == 0 ? rx63_phrasesf_r_plus : rx63_phrasesf_r_minus;
+		insn->Op2.reg = data1 >> 4;
 	}
 	else
 	{
-		set_reg(cmd.Op2, data1 & 0x0f);
+		set_reg(insn->Op2, data1 & 0x0f);
 	
-		cmd.Op1.type = o_phrase;
-		cmd.Op1.phrase_type = ad == 2 ? rx63_phrases::f_r_plus : rx63_phrases::f_r_minus;
-		cmd.Op1.reg = data1 >> 4;
+		insn->Op1.type = o_phrase;
+		insn->Op1.phrase_type = ad == 2 ? rx63_phrasesf_r_plus : rx63_phrasesf_r_minus;
+		insn->Op1.reg = data1 >> 4;
 	}
 
-	cmd.size = 3;
+	insn->size = 3;
 }
 
-void b2_ad_sz_rs_rd()
+void b2_ad_sz_rs_rd(insn_t *insn)
 {
-	uchar data0 = get_hl8( cmd.ea + 1 );
-	uchar data1 = get_hl8( cmd.ea + 2 );
+	uchar data0 = get_hl8( insn->ea + 1 );
+	uchar data1 = get_hl8( insn->ea + 2 );
 
 	memex_t sz = (memex_t)( data0 & 1);
 
-	cmd.auxpref |= (sz + 1) << 4;
+	insn->auxpref |= (sz + 1) << 4;
 
 	uchar ad = (data0 >> 2) & 3;
 	if (ad < 2)
 		return;
 
-	set_reg(cmd.Op2, data1 & 0x0f);
+	set_reg(insn->Op2, data1 & 0x0f);
 	
-	cmd.Op1.type = o_phrase;
-	cmd.Op1.phrase_type = ad == 2 ? rx63_phrases::f_r_plus : rx63_phrases::f_r_minus;
-	cmd.Op1.reg = data1 >> 4;
+	insn->Op1.type = o_phrase;
+	insn->Op1.phrase_type = ad == 2 ? rx63_phrasesf_r_plus : rx63_phrasesf_r_minus;
+	insn->Op1.reg = data1 >> 4;
 
-	cmd.size = 3;
+	insn->size = 3;
 }
 
-void b2_cb()
+void b2_cb(insn_t *insn)
 {
-	uchar flag = get_hl8( cmd.ea + 1 ) & 0xf;
+	uchar flag = get_hl8( insn->ea + 1 ) & 0xf;
 	if ((flag > 3 && flag < 8) || flag > 9)
 		return;
 
-	cmd.size = 2;
-	cmd.Op1.type = o_flag;
-	cmd.Op1.value = flag;
+	insn->size = 2;
+	insn->Op1.type = o_flag;
+	insn->Op1.value = flag;
 }
 
-void b2_cr()
+void b2_cr(insn_t *insn)
 {
-	uchar cr =  get_hl8( cmd.ea + 1 ) & 0xf;
+	uchar cr =  get_hl8( insn->ea + 1 ) & 0xf;
 
 	if (cr == 1 || cr > 3 && cr < 8 || cr > 12)
 		return;
 
-	cmd.size = 2;
-	cmd.Op1.type = o_creg;
-	cmd.Op1.value = cr;
+	insn->size = 2;
+	insn->Op1.type = o_creg;
+	insn->Op1.value = cr;
 }
 
-void b2_cr_()
+void b2_cr_(insn_t *insn)
 {
-	uchar cr =  get_hl8( cmd.ea + 1 ) & 0xf;
+	uchar cr =  get_hl8( insn->ea + 1 ) & 0xf;
 
 	if (cr > 3 && cr < 8 || cr > 12)
 		return;
 
-	cmd.size = 2;
-	cmd.Op1.type = o_creg;
-	cmd.Op1.value = cr;
+	insn->size = 2;
+	insn->Op1.type = o_creg;
+	insn->Op1.value = cr;
 }
 
-void b2_cr_rd()
+void b2_cr_rd(insn_t *insn)
 {
-	uchar data = get_hl8( cmd.ea + 2 );
+	uchar data = get_hl8( insn->ea + 2 );
 
 	uchar creg =  data >> 4;
 
 	if ((creg > 3 && creg < 8) || creg > 12)
 		return;
 
-	cmd.size = 3;
-	cmd.Op1.type = o_creg;
-	cmd.Op1.value = creg;
+	insn->size = 3;
+	insn->Op1.type = o_creg;
+	insn->Op1.value = creg;
 
-	set_reg(cmd.Op2, data & 0xf);
+	set_reg(insn->Op2, data & 0xf);
 }
 
-void b2_imm3_ld_rd_cd()
+void b2_imm3_ld_rd_cd(insn_t *insn)
 {
-	uchar data0 = get_hl8( cmd.ea + 1 );
-	uchar data1 = get_hl8( cmd.ea + 2 );
+	uchar data0 = get_hl8( insn->ea + 1 );
+	uchar data1 = get_hl8( insn->ea + 2 );
 
 	uchar cd = data1 & 0xf;
 
@@ -638,256 +638,256 @@ void b2_imm3_ld_rd_cd()
 
 	ld_t ld = (ld_t) ( data0 & 3 );
 
-	cmd.Op1.type = o_imm;
-	cmd.Op1.dtyp = dt_byte;
-	cmd.Op1.value = (data0 >> 2) & 7;
+	insn->Op1.type = o_imm;
+	insn->Op1.dtype = dt_byte;
+	insn->Op1.value = (data0 >> 2) & 7;
 
-	cmd.auxpref = cd;
+	insn->auxpref = cd;
 
-	cmd.size = 3 + set_displ(cmd.Op2, ld, memex_t::b, data1 >> 4, cmd.ea + 3);
+	insn->size = 3 + set_displ(insn->Op2, ld, memex_tb, data1 >> 4, insn->ea + 3);
 }
 
-void b2_imm5_cd_rd()
+void b2_imm5_cd_rd(insn_t *insn)
 {
-	uchar data = get_hl8( cmd.ea + 2 );
+	uchar data = get_hl8( insn->ea + 2 );
 
 	uchar cd = data >> 4;
 	if (cd == 0xe || cd == 0xf)
 		return;
 
-	cmd.Op1.type = o_imm;
-	cmd.Op1.dtyp = dt_byte;
-	cmd.Op1.value = get_hl8( cmd.ea + 1 ) & 0x1f;
+	insn->Op1.type = o_imm;
+	insn->Op1.dtype = dt_byte;
+	insn->Op1.value = get_hl8( insn->ea + 1 ) & 0x1f;
 
-	cmd.auxpref = cd;
+	insn->auxpref = cd;
 
-	set_reg(cmd.Op2, data & 0xf);
-	cmd.size = 3;
+	set_reg(insn->Op2, data & 0xf);
+	insn->size = 3;
 }
 
-void b2_imm5_rd()
+void b2_imm5_rd(insn_t *insn)
 {
-	uchar data = get_hl8( cmd.ea + 2 );
+	uchar data = get_hl8( insn->ea + 2 );
 
-	cmd.Op1.type = o_imm;
-	cmd.Op1.dtyp = dt_byte;
-	cmd.Op1.value = (data >> 4) & 0x1f;
+	insn->Op1.type = o_imm;
+	insn->Op1.dtype = dt_byte;
+	insn->Op1.value = (data >> 4) & 0x1f;
 
-	set_reg( cmd.Op2, data & 0xf);
-	cmd.size = 3;
+	set_reg( insn->Op2, data & 0xf);
+	insn->size = 3;
 }
 
-void b2_imm5_rs2_rd()
+void b2_imm5_rs2_rd(insn_t *insn)
 {
-	uchar data = get_hl8( cmd.ea + 2 );
+	uchar data = get_hl8( insn->ea + 2 );
 
-	cmd.Op1.type = o_imm;
-	cmd.Op1.dtyp = dt_byte;
-	cmd.Op1.value = get_hl8( cmd.ea + 1 ) & 0x1f;
+	insn->Op1.type = o_imm;
+	insn->Op1.dtype = dt_byte;
+	insn->Op1.value = get_hl8( insn->ea + 1 ) & 0x1f;
 
-	set_reg( cmd.Op2, data >> 4 );
-	set_reg( cmd.Op3, data & 0xf );
+	set_reg( insn->Op2, data >> 4 );
+	set_reg( insn->Op3, data & 0xf );
 
-	cmd.size = 3;
+	insn->size = 3;
 }
 
-void b2_imm8()
+void b2_imm8(insn_t *insn)
 {
-	cmd.Op1.type = o_imm;
-	cmd.Op1.dtyp = dt_byte;
-	cmd.Op1.value = get_hl8( cmd.ea + 2 );
-	cmd.size = 3;
+	insn->Op1.type = o_imm;
+	insn->Op1.dtype = dt_byte;
+	insn->Op1.value = get_hl8( insn->ea + 2 );
+	insn->size = 3;
 }
 
-void b2_ld_rd_imm3()
+void b2_ld_rd_imm3(insn_t *insn)
 {
-	ld_t ld = (ld_t) ( get_hl8( cmd.ea ) & 3 );
-	uchar data = get_hl8( cmd.ea + 1 );
+	ld_t ld = (ld_t) ( get_hl8( insn->ea ) & 3 );
+	uchar data = get_hl8( insn->ea + 1 );
 
-	cmd.Op1.type = o_imm;
-	cmd.Op1.dtyp = dt_byte;
-	cmd.Op1.value = data & 7;
+	insn->Op1.type = o_imm;
+	insn->Op1.dtype = dt_byte;
+	insn->Op1.value = data & 7;
 
-	cmd.size = 2 + set_displ( cmd.Op2, ld, memex_t::b, data >> 4, cmd.ea + 2);
+	insn->size = 2 + set_displ( insn->Op2, ld, memex_tb, data >> 4, insn->ea + 2);
 }
 
-void b2_ld_rd_rs()
+void b2_ld_rd_rs(insn_t *insn)
 {
-	ld_t ld = (ld_t) ( get_hl8( cmd.ea + 1) & 3 );
-	uchar data = get_hl8( cmd.ea + 2 );
+	ld_t ld = (ld_t) ( get_hl8( insn->ea + 1) & 3 );
+	uchar data = get_hl8( insn->ea + 2 );
 
-	set_reg(cmd.Op1, data & 0xf);
-	cmd.size = 3 + set_displ(cmd.Op2, ld, memex_t::b, data >> 4, cmd.ea + 3);
+	set_reg(insn->Op1, data & 0xf);
+	insn->size = 3 + set_displ(insn->Op2, ld, memex_tb, data >> 4, insn->ea + 3);
 }
 
-void b2_ld_rs_rd_ub()
+void b2_ld_rs_rd_ub(insn_t *insn)
 {
-	uchar data = get_hl8( cmd.ea + 2 );
+	uchar data = get_hl8( insn->ea + 2 );
 
-	ld_t ld = (ld_t)(get_hl8( cmd.ea + 1 ) & 3);
+	ld_t ld = (ld_t)(get_hl8( insn->ea + 1 ) & 3);
 
-	cmd.size = 3 + set_displ(cmd.Op1, ld, memex_t::ub, data >> 4, cmd.ea + 3);
-	set_reg(cmd.Op2, data & 0xf);
+	insn->size = 3 + set_displ(insn->Op1, ld, memex_tub, data >> 4, insn->ea + 3);
+	set_reg(insn->Op2, data & 0xf);
 }
 
-void b2_ld_rs_rd_l()
+void b2_ld_rs_rd_l(insn_t *insn)
 {
-	uchar data = get_hl8( cmd.ea + 2 );
+	uchar data = get_hl8( insn->ea + 2 );
 
-	ld_t ld = (ld_t)(get_hl8( cmd.ea + 1 ) & 3);
+	ld_t ld = (ld_t)(get_hl8( insn->ea + 1 ) & 3);
 
-	cmd.size = 3 + set_displ(cmd.Op1, ld, memex_t::l, data >> 4, cmd.ea + 3);
-	set_reg(cmd.Op2, data & 0xf);
+	insn->size = 3 + set_displ(insn->Op1, ld, memex_tl, data >> 4, insn->ea + 3);
+	set_reg(insn->Op2, data & 0xf);
 }
 
 
-void b2_ld_rs_sz()
+void b2_ld_rs_sz(insn_t *insn)
 {
-	ld_t ld = (ld_t)(get_hl8( cmd.ea ) & 3);
+	ld_t ld = (ld_t)(get_hl8( insn->ea ) & 3);
 	if (ld == 3)
 		return;
 
-	uchar data = get_hl8( cmd.ea + 1 );
+	uchar data = get_hl8( insn->ea + 1 );
 
 	memex_t sz = (memex_t)( data & 3 );
 	if (sz == 3)
 		return;
 
-	cmd.auxpref |= (sz + 1) << 4;
+	insn->auxpref |= (sz + 1) << 4;
 
-	cmd.size = 2 + set_displ(cmd.Op1, ld, (memex_t)(sz|memex_t::dont_show), data >> 4, cmd.ea + 2);
+	insn->size = 2 + set_displ(insn->Op1, ld, (memex_t)(sz|memex_tdont_show), data >> 4, insn->ea + 2);
 }
 
-void b2_li_rd()
+void b2_li_rd(insn_t *insn)
 {
-	simm_t li = (simm_t)(get_hl8( cmd.ea ) & 3);
-	uchar data = get_hl8 ( cmd.ea + 1 );
+	simm_t li = (simm_t)(get_hl8( insn->ea ) & 3);
+	uchar data = get_hl8 ( insn->ea + 1 );
 
-	cmd.size = 2 + set_imm(cmd.Op1, li, cmd.ea + 2);
-	set_reg(cmd.Op2, data & 0xf);
+	insn->size = 2 + set_imm(insn->Op1, li, insn->ea + 2);
+	set_reg(insn->Op2, data & 0xf);
 }
 
-void b2_mi_ld_rs_rd()
+void b2_mi_ld_rs_rd(insn_t *insn)
 {
-	uchar data0 = get_hl8( cmd.ea + 1 );
-	uchar data1 = get_hl8( cmd.ea + 2 );
+	uchar data0 = get_hl8( insn->ea + 1 );
+	uchar data1 = get_hl8( insn->ea + 2 );
 
 	memex_t memex = (memex_t)(data0 >> 6);
 	ld_t ld = (ld_t)(data0 & 3);
 	
-	cmd.size = 3 + set_displ(cmd.Op1, ld, memex, data1 >> 4, cmd.ea + 3);
-	set_reg(cmd.Op2, data1 & 0xf);
+	insn->size = 3 + set_displ(insn->Op1, ld, memex, data1 >> 4, insn->ea + 3);
+	set_reg(insn->Op2, data1 & 0xf);
 }
 
-void b2_no_args()
+void b2_no_args(insn_t *insn)
 {
-	cmd.size = 2;
+	insn->size = 2;
 }
 
-void b2_rd()
+void b2_rd(insn_t *insn)
 {
-	set_reg(cmd.Op1,  get_hl8( cmd.ea + 1 ) & 0x0f);
-	cmd.size = 2;
+	set_reg(insn->Op1,  get_hl8( insn->ea + 1 ) & 0x0f);
+	insn->size = 2;
 }
 
-void b2_rd_li()
+void b2_rd_li(insn_t *insn)
 {
-	uchar data = get_hl8 ( cmd.ea + 1 );
-	cmd.auxpref |= (memex_t::l + 1) << 4;
+	uchar data = get_hl8 ( insn->ea + 1 );
+	insn->auxpref |= (memex_tl + 1) << 4;
 	simm_t li = (simm_t)( (data >> 2) & 3);
-	cmd.size = 2 + set_imm(cmd.Op1, li, cmd.ea + 2);
-	set_reg(cmd.Op2, (data >> 4) & 0xf);
+	insn->size = 2 + set_imm(insn->Op1, li, insn->ea + 2);
+	set_reg(insn->Op2, (data >> 4) & 0xf);
 }
 
-void b2_rd_rs_rs2()
+void b2_rd_rs_rs2(insn_t *insn)
 {
-	uchar data0 = get_hl8( cmd.ea + 1 );
-	uchar data1 = get_hl8( cmd.ea + 2 );
+	uchar data0 = get_hl8( insn->ea + 1 );
+	uchar data1 = get_hl8( insn->ea + 2 );
 
-	set_reg(cmd.Op1, data1 >> 4);
-	set_reg(cmd.Op2, data1 & 0xf);
-	set_reg(cmd.Op3, data0 & 0xf );
+	set_reg(insn->Op1, data1 >> 4);
+	set_reg(insn->Op2, data1 & 0xf);
+	set_reg(insn->Op3, data0 & 0xf );
 
-	cmd.size = 3;
+	insn->size = 3;
 }
 
-void b2_rs()
+void b2_rs(insn_t *insn)
 {
-	cmd.auxpref |= (memex_t::l + 1) << 4;
-	set_reg(cmd.Op1, get_hl8( cmd.ea + 1) & 0xf);
-	cmd.size = 2;
+	insn->auxpref |= (memex_tl + 1) << 4;
+	set_reg(insn->Op1, get_hl8( insn->ea + 1) & 0xf);
+	insn->size = 2;
 }
 
-void b2_rs_()
+void b2_rs_(insn_t *insn)
 {
-	set_reg(cmd.Op1, get_hl8( cmd.ea + 1) & 0xf);
-	cmd.size = 2;
+	set_reg(insn->Op1, get_hl8( insn->ea + 1) & 0xf);
+	insn->size = 2;
 }
 
-void b2_rs_rd()
+void b2_rs_rd(insn_t *insn)
 {
-	uchar data = get_hl8( cmd.ea + 2 );
-	cmd.size = 3;
-	set_reg(cmd.Op1, data >> 4);
-	set_reg(cmd.Op2, data & 0xf);
+	uchar data = get_hl8( insn->ea + 2 );
+	insn->size = 3;
+	set_reg(insn->Op1, data >> 4);
+	set_reg(insn->Op2, data & 0xf);
 }
 
-void b2_rs2_uimm8()
+void b2_rs2_uimm8(insn_t *insn)
 {
-	cmd.Op1.type = o_imm;
-	cmd.Op1.dtyp = dt_byte;
-	cmd.Op1.value = get_hl8( cmd.ea + 2 );
-	set_reg(cmd.Op2, get_hl8( cmd.ea + 1 ) & 0xf);
-	cmd.size = 3;
+	insn->Op1.type = o_imm;
+	insn->Op1.dtype = dt_byte;
+	insn->Op1.value = get_hl8( insn->ea + 2 );
+	set_reg(insn->Op2, get_hl8( insn->ea + 1 ) & 0xf);
+	insn->size = 3;
 }
 
-void b2_rs2_uimm8_()
+void b2_rs2_uimm8_(insn_t *insn)
 {
-	cmd.auxpref |= (memex_t::l + 1) << 4;
-	cmd.Op1.type = o_imm;
-	cmd.Op1.dtyp = dt_byte;
-	cmd.Op1.value = get_hl8( cmd.ea + 2 );
-	set_reg(cmd.Op2, get_hl8( cmd.ea + 1 ) & 0xf);
-	cmd.size = 3;
+	insn->auxpref |= (memex_tl + 1) << 4;
+	insn->Op1.type = o_imm;
+	insn->Op1.dtype = dt_byte;
+	insn->Op1.value = get_hl8( insn->ea + 2 );
+	set_reg(insn->Op2, get_hl8( insn->ea + 1 ) & 0xf);
+	insn->size = 3;
 }
 
-void b2_rs_cr()
+void b2_rs_cr(insn_t *insn)
 {
-	uchar data = get_hl8( cmd.ea + 2 );
+	uchar data = get_hl8( insn->ea + 2 );
 
 	uchar cr = data & 0xf;
 
 	if (cr == 1 || cr > 3 && cr < 8 || cr > 12)
 		return;
 
-	set_reg(cmd.Op1, data >> 4);
+	set_reg(insn->Op1, data >> 4);
 
-	cmd.Op2.type = o_creg;
-	cmd.Op2.value = cr;
-	cmd.Op2.dtyp = dt_byte;
-	cmd.size = 3;
+	insn->Op2.type = o_creg;
+	insn->Op2.value = cr;
+	insn->Op2.dtype = dt_byte;
+	insn->size = 3;
 }
 
-void b2_sz()
+void b2_sz(insn_t *insn)
 {
-	memex_t sz = (memex_t)( get_hl8( cmd.ea + 1 ) & 3);
+	memex_t sz = (memex_t)( get_hl8( insn->ea + 1 ) & 3);
 	if (sz == 3)
 		return;
 
-	cmd.auxpref |= (sz + 1) << 4;
-	cmd.size = 2;
+	insn->auxpref |= (sz + 1) << 4;
+	insn->size = 2;
 }
 
-void b2_sz_ld_rd_cd()
+void b2_sz_ld_rd_cd(insn_t *insn)
 {
-	uchar data0 = get_hl8( cmd.ea + 1 );
-	uchar data1 = get_hl8( cmd.ea + 2 );
+	uchar data0 = get_hl8( insn->ea + 1 );
+	uchar data1 = get_hl8( insn->ea + 2 );
 
 	memex_t sz = (memex_t)(( data0 >> 2 ) & 3);
 	if (sz == 3)
 		return;
 
-	cmd.auxpref |= (sz + 1) << 4;
+	insn->auxpref |= (sz + 1) << 4;
 
 	ld_t ld = (ld_t)(data0 & 3);
 
@@ -896,131 +896,131 @@ void b2_sz_ld_rd_cd()
 	if (cd == 0xf || cd == 0xe)
 		return;
 
-	cmd.auxpref = cd;
-	cmd.auxpref |= (sz + 1) << 4;
+	insn->auxpref = cd;
+	insn->auxpref |= (sz + 1) << 4;
 
-	cmd.size = 3 + set_displ(cmd.Op1, ld, (memex_t)(sz|memex_t::dont_show), data1 >> 4, cmd.ea + 3);
+	insn->size = 3 + set_displ(insn->Op1, ld, (memex_t)(sz|memex_tdont_show), data1 >> 4, insn->ea + 3);
 }
 
-void b2_sz_ri_rb_rd()
+void b2_sz_ri_rb_rd(insn_t *insn)
 {
-	uchar data0 = get_hl8( cmd.ea + 1 );
-	uchar data1 = get_hl8( cmd.ea + 2 );
+	uchar data0 = get_hl8( insn->ea + 1 );
+	uchar data1 = get_hl8( insn->ea + 2 );
 
 	memex_t sz = (memex_t)(( data0 >> 4 ) & 3);
 	if (sz == 3)
 		return;
 
-	cmd.auxpref |= (sz + 1) << 4;
+	insn->auxpref |= (sz + 1) << 4;
 
-	cmd.Op1.type = o_phrase;
-	cmd.Op1.phrase_type = rx63_phrases::f_r_r;
-	cmd.Op1.reg = data1 >> 4;
-	cmd.Op1.value = data0 & 0xf;
-	cmd.Op1.dtyp = dt_word;
+	insn->Op1.type = o_phrase;
+	insn->Op1.phrase_type = rx63_phrasesf_r_r;
+	insn->Op1.reg = data1 >> 4;
+	insn->Op1.value = data0 & 0xf;
+	insn->Op1.dtype = dt_word;
 
-	set_reg(cmd.Op2, data1 & 0x0f);
-	cmd.size = 3;
+	set_reg(insn->Op2, data1 & 0x0f);
+	insn->size = 3;
 }
 
-void b2_sz_ri_rb_rd_u()
+void b2_sz_ri_rb_rd_u(insn_t *insn)
 {
-	uchar data0 = get_hl8( cmd.ea + 1 );
-	uchar data1 = get_hl8( cmd.ea + 2 );
+	uchar data0 = get_hl8( insn->ea + 1 );
+	uchar data1 = get_hl8( insn->ea + 2 );
 
 	memex_t sz = (memex_t)(( data0 >> 4 ) & 1);
 
-	cmd.auxpref |= (sz + 1) << 4;
+	insn->auxpref |= (sz + 1) << 4;
 
-	cmd.Op1.type = o_phrase;
-	cmd.Op1.phrase_type = rx63_phrases::f_r_r;
-	cmd.Op1.reg = data1 >> 4;
-	cmd.Op1.value = data0 & 0xf;
-	cmd.Op1.dtyp = dt_word;
+	insn->Op1.type = o_phrase;
+	insn->Op1.phrase_type = rx63_phrasesf_r_r;
+	insn->Op1.reg = data1 >> 4;
+	insn->Op1.value = data0 & 0xf;
+	insn->Op1.dtype = dt_word;
 
-	set_reg(cmd.Op2, data1 & 0x0f);
-	cmd.size = 3;
+	set_reg(insn->Op2, data1 & 0x0f);
+	insn->size = 3;
 }
 
-void b2_sz_ri_rb_rs()
+void b2_sz_ri_rb_rs(insn_t *insn)
 {
-	uchar data0 = get_hl8( cmd.ea + 1 );
-	uchar data1 = get_hl8( cmd.ea + 2 );
+	uchar data0 = get_hl8( insn->ea + 1 );
+	uchar data1 = get_hl8( insn->ea + 2 );
 
 	memex_t sz = (memex_t)(( data0 >> 4 ) & 3);
 	if (sz == 3)
 		return;
 
-	cmd.auxpref |= (sz + 1) << 4;
+	insn->auxpref |= (sz + 1) << 4;
 
-	cmd.Op2.type = o_phrase;
-	cmd.Op2.phrase_type = rx63_phrases::f_r_r;
-	cmd.Op2.reg = data1 >> 4;
-	cmd.Op2.value = data0 & 0xf;
-	cmd.Op2.dtyp = dt_word;
+	insn->Op2.type = o_phrase;
+	insn->Op2.phrase_type = rx63_phrasesf_r_r;
+	insn->Op2.reg = data1 >> 4;
+	insn->Op2.value = data0 & 0xf;
+	insn->Op2.dtype = dt_word;
 
-	set_reg(cmd.Op1, data1 & 0x0f);
-	cmd.size = 3;
+	set_reg(insn->Op1, data1 & 0x0f);
+	insn->size = 3;
 }
 
-void b2_sz_rs()
+void b2_sz_rs(insn_t *insn)
 {
-	uchar data = get_hl8( cmd.ea + 1 );
+	uchar data = get_hl8( insn->ea + 1 );
 
 	memex_t sz = (memex_t)(( data >> 4 ) & 3);
 	if (sz == 3)
 		return;
 
-	cmd.auxpref |= (sz + 1) << 4;
+	insn->auxpref |= (sz + 1) << 4;
 
-	set_reg(cmd.Op1, data & 0xf);
-	cmd.size = 2;
+	set_reg(insn->Op1, data & 0xf);
+	insn->size = 2;
 }
 
-void b3_imm1()
+void b3_imm1(insn_t *insn)
 {
-	cmd.Op1.type = o_imm;
-	cmd.Op1.dtyp = dt_byte;
-	cmd.Op1.value = (get_hl8( cmd.ea + 2) & 0x10) == 0 ? 1 : 2;
-	cmd.size = 3;
+	insn->Op1.type = o_imm;
+	insn->Op1.dtype = dt_byte;
+	insn->Op1.value = (get_hl8( insn->ea + 2) & 0x10) == 0 ? 1 : 2;
+	insn->size = 3;
 }
 
-void b3_imm3_ld_rd()
+void b3_imm3_ld_rd(insn_t *insn)
 {
-	uchar data0 = get_hl8( cmd.ea + 1 );
-	uchar data1 = get_hl8( cmd.ea + 2 );
+	uchar data0 = get_hl8( insn->ea + 1 );
+	uchar data1 = get_hl8( insn->ea + 2 );
 
 	ld_t ld = (ld_t)(data0 & 3);
 
-	cmd.Op1.type = o_imm;
-	cmd.Op1.dtyp = dt_byte;
-	cmd.Op1.value = (data0 >> 2) & 7;
+	insn->Op1.type = o_imm;
+	insn->Op1.dtype = dt_byte;
+	insn->Op1.value = (data0 >> 2) & 7;
 
-	cmd.size = 3 + set_displ(cmd.Op2, ld, memex_t::b, data1 >> 4, cmd.ea + 3);
+	insn->size = 3 + set_displ(insn->Op2, ld, memex_tb, data1 >> 4, insn->ea + 3);
 }
 
-void b3_imm4()
+void b3_imm4(insn_t *insn)
 {
-	cmd.Op1.type = o_imm;
-	cmd.Op1.value = get_hl8( cmd.ea + 2) & 0xf;
-	cmd.Op1.dtyp = dt_byte;
-	cmd.size = 3;
+	insn->Op1.type = o_imm;
+	insn->Op1.value = get_hl8( insn->ea + 2) & 0xf;
+	insn->Op1.dtype = dt_byte;
+	insn->size = 3;
 }
 
-void b3_imm5_rd()
+void b3_imm5_rd(insn_t *insn)
 {
-	cmd.Op1.type = o_imm;
-	cmd.Op1.dtyp = dt_byte;
-	cmd.Op1.value = get_hl8( cmd.ea + 1 ) & 0x1f;
+	insn->Op1.type = o_imm;
+	insn->Op1.dtype = dt_byte;
+	insn->Op1.value = get_hl8( insn->ea + 1 ) & 0x1f;
 
-	set_reg( cmd.Op2, get_hl8( cmd.ea + 2 ) & 0xf );
-	cmd.size = 3;
+	set_reg( insn->Op2, get_hl8( insn->ea + 2 ) & 0xf );
+	insn->size = 3;
 }
 
-void b3_ld_rs_rd()
+void b3_ld_rs_rd(insn_t *insn)
 {
-	uchar data0 = get_hl8( cmd.ea + 1 );
-	uchar data1 = get_hl8( cmd.ea + 3 );
+	uchar data0 = get_hl8( insn->ea + 1 );
+	uchar data1 = get_hl8( insn->ea + 3 );
 
 	ld_t ld = (ld_t)(data0 & 3);
 	if (ld == 3)
@@ -1028,65 +1028,65 @@ void b3_ld_rs_rd()
 
 	memex_t memex = (memex_t)(data0 >> 6);
 
-	cmd.size = 4 + set_displ(cmd.Op1, ld, memex, data1 >> 4, cmd.ea + 4);
-	set_reg(cmd.Op2, data1 & 0xf);
+	insn->size = 4 + set_displ(insn->Op1, ld, memex, data1 >> 4, insn->ea + 4);
+	set_reg(insn->Op2, data1 & 0xf);
 }
 
-void b3_li_cr()
+void b3_li_cr(insn_t *insn)
 {
-	simm_t li = (simm_t)((get_hl8( cmd.ea + 1 ) >> 2) & 3);
-	uchar cr = get_hl8( cmd.ea + 2) & 0xf;
+	simm_t li = (simm_t)((get_hl8( insn->ea + 1 ) >> 2) & 3);
+	uchar cr = get_hl8( insn->ea + 2) & 0xf;
 
 	if (cr == 1 || cr >3 && cr < 8 || cr > 12)
 		return;
 
-	cmd.size = 3 + set_imm(cmd.Op1, li, cmd.ea + 3);
+	insn->size = 3 + set_imm(insn->Op1, li, insn->ea + 3);
 
-	cmd.Op2.type = o_creg;
-	cmd.Op2.value = cr;
-	cmd.Op2.dtyp = dt_byte;
+	insn->Op2.type = o_creg;
+	insn->Op2.value = cr;
+	insn->Op2.dtype = dt_byte;
 }
 
-void b3_li_rd()
+void b3_li_rd(insn_t *insn)
 {
-	simm_t li = (simm_t)((get_hl8( cmd.ea + 1 ) >> 2) & 3);
-	uchar data = get_hl8( cmd.ea + 2 ) & 0xf;
+	simm_t li = (simm_t)((get_hl8( insn->ea + 1 ) >> 2) & 3);
+	uchar data = get_hl8( insn->ea + 2 ) & 0xf;
 
-	cmd.size = 3 + set_imm(cmd.Op1, li, cmd.ea + 3);
-	set_reg(cmd.Op2,  data);
+	insn->size = 3 + set_imm(insn->Op1, li, insn->ea + 3);
+	set_reg(insn->Op2,  data);
 }
 
-void b3_mi_ld_rs_rd()
+void b3_mi_ld_rs_rd(insn_t *insn)
 {
-	uchar data0 = get_hl8( cmd.ea + 1 );
-	uchar data1 = get_hl8( cmd.ea + 3 );
+	uchar data0 = get_hl8( insn->ea + 1 );
+	uchar data1 = get_hl8( insn->ea + 3 );
 
 	memex_t memex = (memex_t)(data0 >> 6);
 	ld_t ld = (ld_t)(data0 & 3);
 	
-	cmd.size = 4 + set_displ(cmd.Op1, ld, memex, data1 >> 4, cmd.ea + 3);
-	set_reg(cmd.Op2, data1 & 0xf);
+	insn->size = 4 + set_displ(insn->Op1, ld, memex, data1 >> 4, insn->ea + 3);
+	set_reg(insn->Op2, data1 & 0xf);
 }
 
-void b3_rd_imm32()
+void b3_rd_imm32(insn_t *insn)
 {
-	cmd.Op1.type = o_imm;
-	cmd.Op1.dtyp = dt_dword;
-	cmd.Op1.value = get_hl32( cmd.ea + 3 );
+	insn->Op1.type = o_imm;
+	insn->Op1.dtype = dt_dword;
+	insn->Op1.value = get_hl32( insn->ea + 3 );
 
-	set_reg(cmd.Op2, get_hl8( cmd.ea + 2) & 0xf);
-	cmd.size = 7;
+	set_reg(insn->Op2, get_hl8( insn->ea + 2) & 0xf);
+	insn->size = 7;
 }
 
-void b3_rd()
+void b3_rd(insn_t *insn)
 {
-	set_reg( cmd.Op1, get_hl8( cmd.ea + 2) & 0xf);
-	cmd.size = 3;
+	set_reg( insn->Op1, get_hl8( insn->ea + 2) & 0xf);
+	insn->size = 3;
 }
 
 struct function_desc_t
 {
-	void (*function)();
+	void (*function)(insn_t*);
 	int opcode_count;
 	uchar mask[4];
 };
@@ -1168,7 +1168,7 @@ static struct function_desc_t function_descs[] =
 struct opcode_t
 {
 	int instruction;
-	void (*function)();
+	void (*function)(insn_t*);
 	uchar opcodes[4];
 };
 
@@ -1417,12 +1417,12 @@ static struct opcode_t opcodes[] = {
 
 enum parse_result_t 
 {
-	nomatch = 0,
-	match = 1,
-	party_match = 2
+	parse_result_tnomatch = 0,
+	parse_result_tmatch = 1,
+	parse_result_tparty_match = 2
 };
 
-parse_result_t parse_opcode(int stage, uchar opcode, void (*function))
+parse_result_t parse_opcode(int stage,insn_t *insn, uchar opcode, void (*function)(insn_t*))
 {
 	bool function_found = false;
 	int i;
@@ -1436,23 +1436,23 @@ parse_result_t parse_opcode(int stage, uchar opcode, void (*function))
 	}
 
 	if (!function_found || function_descs[i].opcode_count < stage+1)
-		return parse_result_t::nomatch;
+		return parse_result_tnomatch;
 
-	uchar code = get_hl8( cmd.ea + stage);
+	uchar code = get_hl8( insn->ea + stage);
 
 	if ((code & function_descs[i].mask[stage]) != opcode)
-		return parse_result_t::nomatch;
+		return parse_result_tnomatch;
 
-	return stage + 1 == function_descs[i].opcode_count ? parse_result_t::match : parse_result_t::party_match;
+	return stage + 1 == function_descs[i].opcode_count ? parse_result_tmatch : parse_result_tparty_match;
 }
 
-int idaapi ana( void )
-{
+int idaapi ana( insn_t *_insn ) {
+	insn_t &insn = *_insn;
 	bool nomatches [ qnumber(opcodes) ]= {false};
 	bool fl_exit = false;
 	int stage = 0;
-	cmd.size = 0;
-	cmd.auxpref = condition_t::none;
+	insn.size = 0;
+	insn.auxpref = (uint32)condition_tnone;
 
 	while(stage < 3 && !fl_exit)
 	{
@@ -1460,14 +1460,14 @@ int idaapi ana( void )
 		{
 			if (nomatches[i])
 				continue;
-	
-			parse_result_t res = parse_opcode(stage, opcodes[i].opcodes[stage], opcodes[i].function);
 
-			if (res == parse_result_t::match)
+			parse_result_t res = parse_opcode(stage, &insn, opcodes[i].opcodes[stage], opcodes[i].function);
+
+			if (res == parse_result_tmatch)
 			{
-				cmd.itype = opcodes[i].instruction;
-				opcodes[i].function();
-				if (cmd.size != 0)
+				insn.itype = opcodes[i].instruction;
+				opcodes[i].function(&insn);
+				if (insn.size != 0)
 				{
 					fl_exit = true;;
 					break;
@@ -1477,7 +1477,7 @@ int idaapi ana( void )
 					nomatches[i] = true;
 				}
 			}
-			else if (res == parse_result_t::nomatch)
+			else if (res == parse_result_tnomatch)
 			{
 				nomatches[i] = true;
 			}
@@ -1486,5 +1486,5 @@ int idaapi ana( void )
 		stage++;
 	}
 
-	return cmd.size;
+	return insn.size;
 }
