@@ -3,7 +3,7 @@
 
 #include "../idaidp.hpp"
 #include "ins.hpp"
-#include <srarea.hpp>
+#include <segregs.hpp>
 
 #define PLFM_RX63 0x8001
 
@@ -35,71 +35,69 @@ enum rx63_cregs
 
 enum rx63_phrases
 {
-	f_r_plus,		// [r+]
-	f_r_minus,		// [-r]
-	f_r_r,			// [r,r]
-	f_r_2_r			// r-r
+	rx63_phrasesf_r_plus,		// [r+]
+	rx63_phrasesf_r_minus,		// [-r]
+	rx63_phrasesf_r_r,			// [r,r]
+	rx63_phrasesf_r_2_r			// r-r
 };
 
 enum memex_t
 {
-	b	= 0,
-	w	= 1,
-	l	= 2,
-	uw	= 3,
-	ub	= 4,
-	s	= 5,
-	a	= 6,
-	dont_show = 0x10
+	memex_tb	= 0,
+	memex_tw	= 1,
+	memex_tl	= 2,
+	memex_tuw	= 3,
+	memex_tub	= 4,
+	memex_ts	= 5,
+	memex_ta	= 6,
+	memex_tdont_show = 0x10
 };
 
 enum cflag_t
 {
-	flag_c = 0,
-	flag_z = 1,
-	flag_s = 2,
-	flag_o = 3,
-	flag_i = 8,
-	flag_u = 9,
+	cflag_tflag_c = 0,
+	cflag_tflag_z = 1,
+	cflag_tflag_s = 2,
+	cflag_tflag_o = 3,
+	cflag_tflag_i = 8,
+	cflag_tflag_u = 9,
 };
 
 enum condition_t
 {
-	eq		= 0,
-	ne		= 1,
-	c		= 2,
-	nc		= 3,
-	gtu		= 4,
-	leu		= 5,
-	pz		= 6,
-	n		= 7,
-	ge		= 8,
-	lt		= 9,
-	gt		= 10,
-	le		= 11,
-	o		= 12,
-	no		= 13,
-	bra		= 14,
-	none	= 15
+	condition_teq		= 0,
+	condition_tne		= 1,
+	condition_tc		= 2,
+	condition_tnc		= 3,
+	condition_tgtu		= 4,
+	condition_tleu		= 5,
+	condition_tpz		= 6,
+	condition_tn		= 7,
+	condition_tge		= 8,
+	condition_tlt		= 9,
+	condition_tgt		= 10,
+	condition_tle		= 11,
+	condition_to		= 12,
+	condition_tno		= 13,
+	condition_tbra		= 14,
+	condition_tnone	= 15
 };
 
 enum ld_t
 {
-	in_reg = 0, // [reg]
-	dsp8 = 1,
-	dsp16 = 2,
-	reg = 3	// reg
+	ld_tin_reg = 0, // [reg]
+	ld_tdsp8 = 1,
+	ld_tdsp16 = 2,
+	ld_treg = 3	// reg
 };
 
-void idaapi header( void );
-void idaapi footer( void );
+void idaapi rx63_header(outctx_t &ctx);
+void idaapi rx63_footer(outctx_t &ctx);
 
-void idaapi segstart( ea_t ea );
-void idaapi segend( ea_t ea );
+void idaapi rx63_segstart(outctx_t &ctx, ea_t ea);
+void idaapi rx63_segend(outctx_t &ctx, ea_t ea);
 
-int  idaapi ana( void );
-int  idaapi emu( void );
-void idaapi out( void );
-bool idaapi outop( op_t &op );
+int  idaapi ana(insn_t *insn);
+int  idaapi emu(const insn_t *insn);
 
 #endif
