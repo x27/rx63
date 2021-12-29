@@ -113,8 +113,8 @@ struct rx63_t : public procmod_t
 	void handle_operand(const op_t &x, bool isload, const insn_t &insn, bool *flow) const;
 	void header(outctx_t &ctx) const;
 	void footer(outctx_t &ctx) const;
-	void segstart(outctx_t &ctx, ea_t ea) const;
-	void segend(outctx_t &ctx, ea_t ea) const;
+	void segstart(outctx_t &ctx, segment_t *seg) const;
+	void segend(outctx_t &ctx, segment_t *seg) const;
 	void load_from_idb();
 
 };

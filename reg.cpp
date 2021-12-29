@@ -37,7 +37,6 @@ ssize_t idaapi rx63_t::on_event(ssize_t msgid, va_list va)
 {
 
 	outctx_t *ctx;
-	ea_t *ea;
 	op_t *op;
 	iohandler_t::parse_area_line0_t cb(ioh);
 
@@ -65,17 +64,19 @@ ssize_t idaapi rx63_t::on_event(ssize_t msgid, va_list va)
 			return 1;
 
 		case processor_t::ev_out_segstart:
+		{
 			ctx = va_arg(va, outctx_t*);
-			ea = va_arg(va, ea_t*);
-			segstart(*ctx, *ea);
+	        segment_t *seg = va_arg(va, segment_t *);
+			segstart(*ctx, seg);
 			return 1;
-
+		}
 		case processor_t::ev_out_segend:
+		{
 			ctx = va_arg(va, outctx_t*);
-			ea = va_arg(va, ea_t*);
-			segend(*ctx, *ea);
+	        segment_t *seg = va_arg(va, segment_t *);
+			segend(*ctx, seg);
 			return 1;
-
+		}
 		case processor_t::ev_ana_insn:
 			{
 				insn_t *insn = va_arg(va, insn_t *);

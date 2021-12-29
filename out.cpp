@@ -46,16 +46,15 @@ void rx63_t::footer(outctx_t &ctx) const
 	ctx.gen_cmt_line("end of file");
 }
 
-void rx63_t::segstart(outctx_t &ctx, ea_t ea) const
+void rx63_t::segstart(outctx_t &ctx, segment_t *seg) const
 {
-	segment_t *sarea = getseg(ea);
+	ea_t ea = ctx.insn_ea;
+	qstring name;
+	get_visible_segm_name(&name, seg);
 
-	qstring sname[MAXNAMELEN];
-	get_visible_segm_name(sname, sarea);
+	ctx.gen_cmt_line(COLSTR("segment %s", SCOLOR_AUTOCMT), name.c_str());
 
-	ctx.gen_cmt_line(COLSTR("segment %s", SCOLOR_AUTOCMT), (char*)sname);
-
-	ea_t org = ea - get_segm_base(sarea);
+	ea_t org = ea - get_segm_base(seg);
 	if (org != 0)
 	{
 		char buf[MAX_NUMBUF];
@@ -64,11 +63,11 @@ void rx63_t::segstart(outctx_t &ctx, ea_t ea) const
 	}
 }
 
-void rx63_t::segend(outctx_t &ctx, ea_t ea) const
+void rx63_t::segend(outctx_t &ctx, segment_t *seg) const
 {
-	qstring sname[MAXNAMELEN];
-	get_visible_segm_name(sname,getseg(ea-1));
-	ctx.gen_cmt_line("end of '%s'", (char*)sname);
+	qstring name;
+	get_visible_segm_name(&name, seg);
+	ctx.gen_cmt_line("end of '%s'", name.c_str());
 }
 
 inline ea_t real_address( ea_t ea )
