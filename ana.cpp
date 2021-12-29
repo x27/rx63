@@ -1,7 +1,5 @@
 #include "rx63.hpp"
 
-//#define USE_REAL_ADDRESS
-
 enum simm_t 
 {
 	imm32	= 0,
@@ -28,11 +26,9 @@ void set_displ_reg(op_t &op, uint16 reg, uval_t value, memex_t memex)
 
 inline ea_t real_address( ea_t ea )
 {
-#ifdef USE_REAL_ADDRESS
-	return (( ea >> 2 << 2 ) + 3 - ( ea & 3 ));
-#else
+	if (inf_is_be())
+		return (( ea >> 2 << 2 ) + 3 - ( ea & 3 ));
 	return ea;
-#endif
 }
 
 uchar get_hl8( ea_t ea)

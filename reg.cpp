@@ -1,7 +1,7 @@
 #include "rx63.hpp"
 #include <diskio.hpp>
-#include "notify_codes.hpp"
 #include <ieee.h>
+#include "../iohandler.hpp"
 
 netnode helper;
 
@@ -15,42 +15,65 @@ static const char *const reg_names[] =
 static qstring device;
 static ioports_t ports;
 
-#include "../iocommon.cpp"
-static ssize_t idaapi notify(void *, int msgid, va_list va)
+//----------------------------------------------------------------------
+// This old-style callback only returns the processor module object.
+static ssize_t idaapi notify(void*, int msgid, va_list /*va*/)
 {
+	if (msgid == processor_t::ev_get_procmod)
+		return size_t(new rx63_t);
+	return 0;
+}
+
+void rx63_t::load_from_idb()
+{
+  int n = ph.get_proc_index();
+  inf_set_be(!(n > 0));
+  ioh.restore_device();
+}
+
+
+//--------------------------------------------------------------------------
+ssize_t idaapi rx63_t::on_event(ssize_t msgid, va_list va)
+{
+
 	outctx_t *ctx;
 	ea_t *ea;
 	op_t *op;
+	iohandler_t::parse_area_line0_t cb(ioh);
 
 	switch (msgid) {
 		case processor_t::ev_init:
 			helper.create("$ RX63");
-			return 1;
+			break;
 
 		case processor_t::ev_newfile:
-			set_device_name(device.c_str(), IORESP_AREA);
-			return 1;
-
+		{
+			char cfgfile[QMAXFILE];
+			ioh.get_cfg_filename(cfgfile, sizeof(cfgfile));
+			if (choose_ioport_device2(&ioh.device, cfgfile, &cb))
+				ioh.set_device_name(device.c_str(), IORESP_AREA);
+			break;
+		}
 		case processor_t::ev_out_header:
 			ctx = va_arg(va, outctx_t*);
-			rx63_header(*ctx);
+			header(*ctx);
 			return 1;
 
 		case processor_t::ev_out_footer:
 			ctx = va_arg(va, outctx_t*);
-			rx63_footer(*ctx);
+			footer(*ctx);
 			return 1;
 
 		case processor_t::ev_out_segstart:
 			ctx = va_arg(va, outctx_t*);
 			ea = va_arg(va, ea_t*);
-			rx63_segstart(*ctx, *ea);
+			segstart(*ctx, *ea);
 			return 1;
 
 		case processor_t::ev_out_segend:
 			ctx = va_arg(va, outctx_t*);
 			ea = va_arg(va, ea_t*);
-			rx63_segend(*ctx, *ea);
+			segend(*ctx, *ea);
 			return 1;
 
 		case processor_t::ev_ana_insn:
@@ -62,7 +85,7 @@ static ssize_t idaapi notify(void *, int msgid, va_list va)
 		case processor_t::ev_emu_insn:
 			{
 				const insn_t *insn = va_arg(va, const insn_t *);
-				return emu(insn)?1:-1;
+				return emu(*insn)?1:-1;
 			}
 
 		case processor_t::ev_out_insn:
@@ -74,14 +97,6 @@ static ssize_t idaapi notify(void *, int msgid, va_list va)
 			ctx = va_arg(va, outctx_t*);
 			op = va_arg(va, op_t*);
 			return out_opnd(*ctx, *op)?1:-1;
-
-		case rx63_module_t::ev_set_machine_type:
-			{
-				int subarch = va_arg(va, int);
-				bool imageFile = va_arg(va, int);
-				bool nonBinary = true;
-				return 0;
-			}
 
 		default:
 			break;
@@ -145,8 +160,18 @@ static const asm_t *const asms[] = { &rx63_asm, NULL };
 //--------------------------------------------------------------------------
 
 #define FAMILY "Renesas RX63 series:"
-static const char *const shnames[] = { "RX63", NULL };
-static const char *const lnames[]  = { "Renesas RX63 MCU", NULL };
+static const char *const shnames[] = 
+{ 
+	"RX63", 
+	"RX63l", 
+	NULL 
+};
+static const char *const lnames[]  = 
+{ 
+	"Renesas RX63 (big endian)", 
+	"Renesas RX63 (little endian)", 
+	NULL 
+};
 
 static const uchar rtscode[]  =     { 0x2 };        // rts
 static const uchar rtsdcode1[] =    { 0x67 };       // rtsd

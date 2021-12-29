@@ -1,8 +1,6 @@
-#include <ida.hpp>
-#include <idp.hpp>
-#include "ins.hpp"
+#include "rx63.hpp"
 
-instruc_t Instructions[] = {
+const instruc_t Instructions[] = {
 
   { "", 0 },										// Unknown Operation
   { "abs",		CF_USE1|CF_CHG1 },					// Absolute value
@@ -110,4 +108,4 @@ instruc_t Instructions[] = {
 
 };
 
-CASSERT(sizeof(Instructions)/sizeof(Instructions[0]) == RX63_last);
+CASSERT(qnumber(Instructions) == RX63_last);

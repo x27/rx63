@@ -30,24 +30,23 @@ static const char * const cregs[] =
 	"psw", "pc", "usp", "fpsw", "", "", "", "", "bpsw", "bpc", "isp", "fintv", "intb", "", "", ""
 };
 
-void idaapi rx63_header(outctx_t &ctx)
+void rx63_t::header(outctx_t &ctx) const
 {
 	ctx.gen_header(GH_PRINT_PROC_ASM_AND_BYTESEX);
 }
 
-void idaapi rx63_footer(outctx_t &ctx)
+void rx63_t::footer(outctx_t &ctx) const
 {
 	char buf[MAXSTR];
 
 	ctx.gen_empty_line();
 
-	//tag_addstr(buf, buf+sizeof(buf), COLOR_ASMDIR, ash.end);
-	ctx.flush_buf(buf, inf.indent);
+	ctx.flush_buf(buf, DEFAULT_INDENT);
 
 	ctx.gen_cmt_line("end of file");
 }
 
-void idaapi rx63_segstart(outctx_t &ctx, ea_t ea)
+void rx63_t::segstart(outctx_t &ctx, ea_t ea) const
 {
 	segment_t *sarea = getseg(ea);
 
@@ -65,7 +64,7 @@ void idaapi rx63_segstart(outctx_t &ctx, ea_t ea)
 	}
 }
 
-void idaapi rx63_segend(outctx_t &ctx, ea_t ea)
+void rx63_t::segend(outctx_t &ctx, ea_t ea) const
 {
 	qstring sname[MAXNAMELEN];
 	get_visible_segm_name(sname,getseg(ea-1));
@@ -224,8 +223,6 @@ bool out_rx63_t::out_operand(const op_t &x)
 
 void out_rx63_t::out_insn()
 {
-	char buf[MAXSTR];
-
 #ifdef SHOWHEXCODES
 	char bin[20];
 	bin[0] = '\0';

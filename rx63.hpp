@@ -1,9 +1,12 @@
 #ifndef _Z8_HPP
 #define _Z8_HPP
 
+#pragma warning(disable : 4800)
+
 #include "../idaidp.hpp"
 #include "ins.hpp"
 #include <segregs.hpp>
+#include "../iohandler.hpp"
 
 #define PLFM_RX63 0x8001
 
@@ -91,13 +94,29 @@ enum ld_t
 	ld_treg = 3	// reg
 };
 
-void idaapi rx63_header(outctx_t &ctx);
-void idaapi rx63_footer(outctx_t &ctx);
-
-void idaapi rx63_segstart(outctx_t &ctx, ea_t ea);
-void idaapi rx63_segend(outctx_t &ctx, ea_t ea);
 
 int  idaapi ana(insn_t *insn);
 int  idaapi emu(const insn_t *insn);
+
+struct rx63_iohandler_t : public iohandler_t
+{
+	struct rx63_t& pm;
+	rx63_iohandler_t(rx63_t& _pm, netnode& nn) : iohandler_t(nn), pm(_pm) {}
+};
+
+struct rx63_t : public procmod_t
+{
+	netnode helper;
+	rx63_iohandler_t ioh = rx63_iohandler_t(*this, helper);
+	virtual ssize_t idaapi on_event(ssize_t msgid, va_list va) override;
+	int idaapi emu(const insn_t &insn) const;
+	void handle_operand(const op_t &x, bool isload, const insn_t &insn, bool *flow) const;
+	void header(outctx_t &ctx) const;
+	void footer(outctx_t &ctx) const;
+	void segstart(outctx_t &ctx, ea_t ea) const;
+	void segend(outctx_t &ctx, ea_t ea) const;
+	void load_from_idb();
+
+};
 
 #endif

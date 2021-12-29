@@ -1,7 +1,7 @@
 #ifndef __INSTRS_HPP
 #define __INSTRS_HPP
 
-extern instruc_t Instructions[];
+extern const instruc_t Instructions[];
 
 enum nameNum ENUM_SIZE(uint16)
 {
