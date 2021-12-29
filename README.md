@@ -1,6 +1,8 @@
 # rx63
 IDA processor module for Renesas RX63 MCU
 
+- added big-endian and little-endian type of cpu
+
 SDK 
 https://www.hex-rays.com/products/ida/support/sdkdoc/index.html
 
