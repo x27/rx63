@@ -15,9 +15,9 @@ void rx63_t::handle_operand(const op_t &op, bool /*isload*/, const insn_t &insn,
                 int iscall = has_insn_feature(insn.itype, CF_CALL);
                 insn.add_cref(ea, op.offb, iscall ? fl_CN : fl_JN);
 
-                if ( flow && iscall ) {
+                if ( *flow && iscall ) {
                     if ( !func_does_return(ea) ) {
-                        flow = false;
+                        *flow = false;
                     }
                 }
             }

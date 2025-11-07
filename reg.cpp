@@ -24,14 +24,6 @@ static ssize_t idaapi notify(void*, int msgid, va_list /*va*/)
 	return 0;
 }
 
-void rx63_t::load_from_idb()
-{
-  int n = ph.get_proc_index();
-  inf_set_be(!(n > 0));
-  ioh.restore_device();
-}
-
-
 //--------------------------------------------------------------------------
 ssize_t idaapi rx63_t::on_event(ssize_t msgid, va_list va)
 {
@@ -51,8 +43,17 @@ ssize_t idaapi rx63_t::on_event(ssize_t msgid, va_list va)
 			ioh.get_cfg_filename(cfgfile, sizeof(cfgfile));
 			if (choose_ioport_device2(&ioh.device, cfgfile, &cb))
 				ioh.set_device_name(device.c_str(), IORESP_AREA);
+
+			inf_set_be ( !ph.get_proc_index() );
+
 			break;
 		}
+
+		case processor_t::ev_oldfile:      // old file loaded
+			inf_set_be ( !ph.get_proc_index() );
+			ioh.restore_device();
+      		break;
+
 		case processor_t::ev_out_header:
 			ctx = va_arg(va, outctx_t*);
 			header(*ctx);
@@ -163,8 +164,8 @@ static const asm_t *const asms[] = { &rx63_asm, NULL };
 #define FAMILY "Renesas RX63 series:"
 static const char *const shnames[] = 
 { 
-	"RX63", 
-	"RX63l", 
+	"RX63BE", 
+	"RX63LE", 
 	NULL 
 };
 static const char *const lnames[]  = 
