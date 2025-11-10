@@ -3,17 +3,6 @@
 //#define SHOWHEXCODES
 
 //----------------------------------------------------------------------
-class out_rx63_t : public outctx_t {
-    void outreg(int r) { this->out_register(ph.reg_names[r]); }
-
-public:
-    bool out_operand(const op_t &x);
-    void out_insn();
-};
-
-DECLARE_OUT_FUNCS_WITHOUT_OUTMNEM(out_rx63_t)
-
-//----------------------------------------------------------------------
 
 static const char * const ccode[] =
 {
@@ -29,6 +18,22 @@ static const char * const cregs[] =
 {
     "psw", "pc", "usp", "fpsw", "", "", "", "", "bpsw", "bpc", "isp", "fintv", "intb", "", "", ""
 };
+
+//----------------------------------------------------------------------
+
+class out_rx63_t : public outctx_t {
+    void outreg(int r) { this->out_register(ph.reg_names[r]); }
+    void outcreg(int r) { this->out_register(cregs[r]); }
+
+public:
+    bool out_operand(const op_t &x);
+    void out_insn();
+};
+
+DECLARE_OUT_FUNCS_WITHOUT_OUTMNEM(out_rx63_t)
+
+
+//----------------------------------------------------------------------
 
 void rx63_t::header(outctx_t &ctx) const
 {
@@ -182,7 +187,7 @@ bool out_rx63_t::out_operand(const op_t &x)
             }
             break;
         case o_creg:
-            this->outreg(x.value & 0xf);
+            this->outcreg(x.value & 0xf);
             break;
 
         case o_phrase:
